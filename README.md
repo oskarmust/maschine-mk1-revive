@@ -2,6 +2,8 @@
 > [andy83-projects/maschine-mk1-revive](https://github.com/andy83-projects/maschine-mk1-revive).
 > Apple Silicon beta: macOS 14 or later. Physical MK1 hardware is required.
 
+Support development of this fork: [Buy me a coffee ☕](https://buymeacoffee.com/muumin1nja).
+
 ## Why this fork exists
 
 This started as a repair job for a real MASCHINE MK1. Pads sometimes failed to register or dropped hits, and highlights could appear on the wrong controls. Display updates also left stale content behind. We wanted the controller to behave reliably and the helper to show what the hardware was actually doing.
