@@ -1,22 +1,22 @@
 # MK1 Revive — out of SPITE
 
+This fork builds on **[Andy83's original MK1 Revive](https://github.com/andy83-projects/maschine-mk1-revive)**.
+Andy's userspace USB and MASCHINE integration made this possible. This fork adds
+the fixes and features below; the original work and its authors remain credited.
+
 **SPITE: Saving Products Intended To Expire.**
 
 A perfectly useful MASCHINE MK1 deserves more music, not a retirement date.
 So we did it out of SPITE: a userspace controller bridge for Apple Silicon Macs,
 with input/display fixes, Controller Studio, and the restored Doom support.
 
-This fork builds on **[Andy83's original MK1 Revive](https://github.com/andy83-projects/maschine-mk1-revive)**.
-Andy's userspace USB and MASCHINE integration made this possible. This fork adds
-the fixes and features below; the original work and its authors remain credited.
+**Support the original project — Andy83**
+
+[![Buy Me a Coffee — andy83](docs/badges/support-andy83.svg)](https://buymeacoffee.com/andy83)
 
 **Support this fork — muumin1nja**
 
 [![Buy Me a Coffee — muumin1nja](docs/badges/support-muumin1nja.svg)](https://buymeacoffee.com/muumin1nja)
-
-**Support the original project — Andy83**
-
-[![Buy Me a Coffee — andy83](docs/badges/support-andy83.svg)](https://buymeacoffee.com/andy83)
 
 [Download v0.4.0-beta.2](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.2)
 · [Installation](#installation) · [Screenshots](#screenshots)
