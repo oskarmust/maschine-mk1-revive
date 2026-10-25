@@ -10,7 +10,7 @@ This started as a repair job for a real MASCHINE MK1. Pads sometimes failed to r
 
 The fixes decode pad reports by their embedded pad IDs, preserve releases, correct physical control/LED mappings, and retain all pending display updates, including black clears. Controller Studio now follows the MK1 layout and makes input, sensitivity and mapping adjustments visible.
 
-Somehow, we also couldn't find Doom running on the controller. Clearly an oversight. Doom support has therefore been “restored” — using the Doom engine and Freedoom data, with gameplay on the left display and the original status bar on the right. For historical accuracy: upstream never claimed to include Doom; the restoration is entirely in our imagination.
+Somehow, we also couldn't find Doom running on the controller. Clearly an oversight. Doom support has therefore been restored — using the Doom engine and Freedoom data, with gameplay on the left display and the original status bar on the right.
 
 ## Controller Studio and idle games
 
@@ -47,6 +47,25 @@ direction or override its MASCHINE destination.
 MASCHINE is not using the controller. The hardware arrows also select games.
 
 ![Game launcher with Pong, Freedoom and Breakout](docs/screenshots/game-launcher.png)
+
+### Games on the displays
+
+Actual game renderer output, enlarged with nearest-neighbor scaling for
+readability. These are framebuffer captures, not photographs of the LCDs.
+Pong and Breakout show the clock/date on the right; Freedoom shows its native
+status bar there.
+
+**Pong**
+
+![Pong gameplay on the left display and clock/date on the right](docs/screenshots/pong.png)
+
+**Breakout**
+
+![Breakout bricks, ball and paddle on the left display and clock/date on the right](docs/screenshots/breakout.png)
+
+**Freedoom**
+
+![Freedoom gameplay on the left display and original Doom status bar on the right](docs/screenshots/freedoom.png)
 
 ## Building this fork
 
