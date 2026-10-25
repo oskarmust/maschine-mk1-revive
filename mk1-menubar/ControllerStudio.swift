@@ -113,10 +113,10 @@ final class MK1LayoutView:NSView {
             parts.append(HardwarePart(rect:r.insetBy(dx:-6,dy:-6),kind:"encoder",index:id,title:title))
         }
         for i in 0..<8 { knob(179+CGFloat(i)*70,201,i+3,"\(i+1)") }
-        button(23,94,93,"CONTROL",24);button(23,126,93,"STEP",31)
-        button(23,162,93,"BROWSE",25);button(23,194,93,"SAMPLING",30)
-        button(23,230,43,"◀",26);button(73,230,43,"▶",29)
-        button(23,267,93,"AUTO WRITE",28);button(23,303,93,"SNAP",27)
+        button(23,56,56,"CONTROL",24);button(85,56,56,"STEP",31)
+        button(23,106,56,"BROWSE",25);button(85,106,56,"SAMPLING",30)
+        button(23,148,56,"◀",26);button(85,148,56,"▶",29)
+        button(23,190,56,"SNAP",27);button(85,190,56,"AUTO WRITE",28)
         // Right-hand 4x4 pad grid: printed numbers increase from bottom to top.
         for row in 0..<4 { for col in 0..<4 {
             let index=(3-row)*4+col
@@ -132,19 +132,19 @@ final class MK1LayoutView:NSView {
             parts.append(HardwarePart(rect:r,kind:"pad",index:index,title:"Pad \(index+1)"))
         } }
         // The three master encoders, groups and transport occupy the left half.
-        knob(145,318,0,"VOLUME");knob(215,318,1,"TEMPO");knob(285,318,2,"SWING")
+        knob(51,298,0,"VOLUME");knob(126,298,1,"TEMPO");knob(201,298,2,"SWING")
+        button(250,285,64,"NOTE REPEAT",40)
         for row in 0..<2 { for col in 0..<4 {
             let i=row*4+col
             let ids=[23,22,21,20,17,16,18,19]
-            button(136+CGFloat(col)*44,391+CGFloat(row)*35,36,String(UnicodeScalar(65+i)!),ids[i])
+            button(23+CGFloat(col)*73,391+CGFloat(row)*35,61,String(UnicodeScalar(65+i)!),ids[i])
         } }
         let rowNames=["SCENE","PATTERN","PAD MODE","NAVIGATE","DUPLICATE","SELECT","SOLO","MUTE"]
         for i in 0..<8 { button(323,270+CGFloat(i)*33,70,rowNames[i],7-i) }
-        button(23,457,93,"NOTE REPEAT",40)
-        button(23,494,93,"ERASE",10)
-        button(139,493,51,"RESTART",15);button(201,493,51,"◀",14)
-        button(263,493,51,"▶",13);button(139,529,51,"GRID",12)
-        button(201,529,51,"PLAY",41);button(263,529,51,"REC",9)
+        button(23,493,61,"RESTART",15);button(96,493,61,"◀",14)
+        button(169,493,61,"▶",13);button(242,493,61,"GRID",12)
+        button(23,529,61,"PLAY",41);button(96,529,61,"REC",9)
+        button(169,529,61,"ERASE",10);button(242,529,61,"SHIFT",11)
         label("Click a pad or knob to tune it · hardware input highlights live",NSRect(x:30,y:566,width:700,height:16),10,.gray)
         NSGraphicsContext.restoreGraphicsState()
     }
