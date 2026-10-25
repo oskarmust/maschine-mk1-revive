@@ -4,7 +4,7 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-VERSION="${VERSION:-0.4.0-beta.1}"
+VERSION="${VERSION:-0.4.0-beta.2}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 OUT_DIR="${REPO_ROOT}/dist"
 ZIP_DEST="${OUT_DIR}/maschine-mk1-revive-v${VERSION}-macos-arm64.zip"

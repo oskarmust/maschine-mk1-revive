@@ -16,7 +16,7 @@ swiftc \
     -framework ServiceManagement \
     -O \
     -target arm64-apple-macosx14.0 \
-    "${SCRIPT_DIR}/main.swift" "${SCRIPT_DIR}/ControllerStudio.swift" \
+    "${SCRIPT_DIR}/main.swift" "${SCRIPT_DIR}/ControllerStudio.swift" "${SCRIPT_DIR}/DoomWADSettings.swift" \
     -o "${BUILD_DIR}/${BINARY_NAME}"
 
 python3 "${REPO_ROOT}/scripts/fetch-freedoom.py"
@@ -36,7 +36,7 @@ cp "${REPO_ROOT}/third_party/doomgeneric/LICENSE" "${CONTENTS}/Resources/freedoo
 codesign --force --sign - "${CONTENTS}/MacOS/mk1-freedoom"
 cp "${SCRIPT_DIR}/Info.plist"                       "${CONTENTS}/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${APP_VERSION:-0.4.0}" "${CONTENTS}/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-400}" "${CONTENTS}/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-401}" "${CONTENTS}/Info.plist"
 cp "${SCRIPT_DIR}/AppIcon.icns"     "${CONTENTS}/Resources/AppIcon.icns"
 cp "${SCRIPT_DIR}/menubar.png"      "${CONTENTS}/Resources/menubar.png"
 cp "${SCRIPT_DIR}/menubar@2x.png"   "${CONTENTS}/Resources/menubar@2x.png"

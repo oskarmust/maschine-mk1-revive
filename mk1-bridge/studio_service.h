@@ -30,7 +30,7 @@ static void studio_publish(void){
  for(int i=0;i<16;i++)STATE("%s%u",i?",":"",atomic_load(&g_studio_pressures[i]));
  STATE("],\"encoderDelta\":[");for(int i=0;i<11;i++)STATE("%s%d",i?",":"",atomic_load(&g_studio_encoder_delta[i]));
  STATE("],\"encoderAge\":[");for(int i=0;i<11;i++){uint64_t t=atomic_load(&g_studio_encoder_time[i]);STATE("%s%llu",i?",":"",(unsigned long long)(t?(now-t)/1000000:999999));}
- STATE("],\"pongAI\":[%s,%s]}\n",g_idle_games.pong.left_idle>=10?"true":"false",g_idle_games.pong.right_manual?"false":"true");
+ STATE("],\"doomError\":%s,\"pongAI\":[%s,%s]}\n",g_freedoom_error[0]?"true":"false",g_idle_games.pong.left_idle>=10?"true":"false",g_idle_games.pong.right_manual?"false":"true");
  #undef STATE
  if(n>=sizeof(text))return;
  char tmp[PATH_MAX];snprintf(tmp,sizeof(tmp),"%s.tmp",g_studio_state_path);

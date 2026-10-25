@@ -97,6 +97,7 @@ int DG_GetKey(int *pressed,unsigned char *key) {
 }
 void DG_SetWindowTitle(const char *title){fprintf(stderr,"MK1 Freedoom: %s\n",title);}
 int main(int argc,char **argv) {
+ setvbuf(stdout,NULL,_IOLBF,0);setvbuf(stderr,NULL,_IONBF,0);
  doomgeneric_Create(argc,argv);
  R_SetViewSize(10,0); /* Native status bar is extracted onto the right LCD. */
  while(1)doomgeneric_Tick();

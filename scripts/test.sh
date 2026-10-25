@@ -13,3 +13,7 @@ sh tests/run-led-mapping-test.sh
 python3 tests/test_display_updates.py
 python3 tests/test_freedoom_keys.py
 python3 tests/test_freedoom_runtime.py
+
+clang -O1 -fsanitize=undefined -framework CoreFoundation tests/test_doom_wads.c -o build/tests/doom_wads
+build/tests/doom_wads
+python3 tests/test_custom_wad_runtime.py

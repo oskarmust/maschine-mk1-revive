@@ -179,12 +179,14 @@ final class ControllerStudio:NSObject,NSWindowDelegate {
     private var controllerView=NSView(),gamesView=NSView()
     private var gameButtons:[NSButton]=[]
     private var gameState=NSTextField(wrappingLabelWithString:"")
+    private var wadSettings=DoomWADSettings.load()
+    private var wadLabel=NSTextField(labelWithString:"")
     private var lastWatch=Date.distantPast
     private var tabs:NSSegmentedControl?
 
     func show(games:Bool=false) {
         if window==nil { build() }
-        loadProfile();refreshInspector()
+        loadProfile();refreshInspector();refreshWAD()
         controllerView.isHidden=games;gamesView.isHidden = !games;tabs?.selectedSegment=games ? 1:0
         window?.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
         if timer==nil { timer=Timer.scheduledTimer(withTimeInterval:0.1,repeats:true){[weak self] _ in self?.poll()} }
@@ -238,10 +240,29 @@ final class ControllerStudio:NSObject,NSWindowDelegate {
             let desc=NSTextField(wrappingLabelWithString:descriptions[i]);desc.frame=NSRect(x:24,y:100,width:298,height:96);desc.font = .systemFont(ofSize:14);desc.textColor = .secondaryLabelColor;card.addSubview(desc)
             let button=NSButton(title:"Play \(titles[i].capitalized)",target:self,action:#selector(playGame(_:)));button.tag=i;button.frame=NSRect(x:20,y:36,width:305,height:40);button.bezelColor=cyan;card.addSubview(button);gameButtons.append(button)
         }
-        gameState.frame=NSRect(x:28,y:105,width:1060,height:55);gameState.font = .systemFont(ofSize:14);gamesView.addSubview(gameState)
+        wadLabel.frame=NSRect(x:28,y:171,width:1060,height:20);wadLabel.font = .systemFont(ofSize:12);wadLabel.textColor = .secondaryLabelColor;gamesView.addSubview(wadLabel)
+        let choose=NSButton(title:"Choose custom WAD…",target:self,action:#selector(chooseWAD));choose.frame=NSRect(x:24,y:133,width:200,height:30);gamesView.addSubview(choose)
+        let restore=NSButton(title:"Use bundled Freedoom",target:self,action:#selector(restoreWAD));restore.frame=NSRect(x:230,y:133,width:200,height:30);gamesView.addSubview(restore)
+        let remove=NSButton(title:"Remove add-on",target:self,action:#selector(removeWADPatch));remove.frame=NSRect(x:436,y:133,width:160,height:30);gamesView.addSubview(remove)
+        gamesView.addSubview(text("Classic IWAD / PWAD · applies on next Doom launch",NSRect(x:610,y:138,width:480,height:20),.systemFont(ofSize:12)))
+        refreshWAD()
+        gameState.frame=NSRect(x:28,y:91,width:1060,height:32);gameState.font = .systemFont(ofSize:14);gamesView.addSubview(gameState)
         let menu=NSButton(title:"Return to game selection",target:self,action:#selector(returnToMenu));menu.frame=NSRect(x:24,y:47,width:265,height:35);gamesView.addSubview(menu)
         gamesView.addSubview(text("Hardware arrows select · Play starts · Browse returns to menu",NSRect(x:305,y:53,width:760,height:22),.systemFont(ofSize:13,weight:.medium)))
     }
+    private func refreshWAD() {wadSettings=DoomWADSettings.load();wadLabel.stringValue=wadSettings.summary;wadLabel.toolTip=[wadSettings.baseWAD,wadSettings.patchWAD].compactMap{$0}.joined(separator:"\n")}
+    private func wadChanged() {
+        refreshWAD()
+        if (state["idle"] as? Bool)==true,(state["game"] as? Int)==1,(state["menu"] as? Bool)==false {studioCommand("MENU")}
+    }
+    private func wadError(_ error:Error) {let alert=NSAlert();alert.messageText="Could not select WAD";alert.informativeText=error.localizedDescription;alert.runModal()}
+    @objc private func chooseWAD() {
+        let panel=NSOpenPanel();panel.title="Choose a classic Doom IWAD or PWAD";panel.allowedFileTypes=["wad"];panel.allowsMultipleSelection=false;panel.canChooseDirectories=false
+        guard panel.runModal() == .OK,let url=panel.url else{return}
+        do {try wadSettings.importWAD(url);wadChanged()}catch{wadError(error)}
+    }
+    @objc private func restoreWAD() {do{try wadSettings.restoreBundled();wadChanged()}catch{wadError(error)}}
+    @objc private func removeWADPatch() {do{try wadSettings.removePatch();wadChanged()}catch{wadError(error)}}
     private func loadProfile() {
         guard let d=try? Data(contentsOf:URL(fileURLWithPath:studioDir+"/controls.plist")),let p=try? PropertyListDecoder().decode(StudioProfile.self,from:d),p.pads.count==16,p.encoders.count==11 else {return}
         profile=p
@@ -294,6 +315,7 @@ final class ControllerStudio:NSObject,NSWindowDelegate {
             let g=(s["game"] as? Int) ?? 0,menu=(s["menu"] as? Bool) ?? true
             let names=["Pong","Freedoom","Breakout"]
             let ai=(s["pongAI"] as? [Bool]) ?? [false,true]
+            if !menu && g==1 && (s["doomError"] as? Bool)==true {gameState.stringValue="Doom could not load the selected WAD. Check /tmp/maschine-mk1-revive/freedoom.log, or restore bundled Freedoom.";return}
             gameState.stringValue=menu ? "Hardware is in game selection. Choose a game here or use the controller arrows.":"Now playing: \(names[max(0,min(2,g))])"+(g==0&&ai.count==2 ? " · P1: \(ai[0] ? "AI":"Human") · P2: \(ai[1] ? "AI":"Human")":"")
         }
     }

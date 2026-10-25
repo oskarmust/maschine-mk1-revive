@@ -3,7 +3,7 @@
 from pathlib import Path
 import os, subprocess, zipfile, hashlib
 root=Path(__file__).resolve().parents[1]
-version=os.environ.get('VERSION','0.4.0-beta.1')
+version=os.environ.get('VERSION','0.4.0-beta.2')
 out=root/'dist';out.mkdir(exist_ok=True)
 archive=out/f'maschine-mk1-revive-v{version}-source.zip'
 prefix=f'maschine-mk1-revive-v{version}/'

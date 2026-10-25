@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <mach-o/dyld.h>
 #include <errno.h>
+#include "doom_wads.h"
+static char g_freedoom_error[160];
 static mk1_doom_shared_t *g_freedoom_shared;
 static pid_t g_freedoom_pid;
 static char g_freedoom_path[PATH_MAX];
@@ -32,13 +34,21 @@ static void stop_freedoom(void)
 static bool start_freedoom(void)
 {
     stop_freedoom();g_freedoom_attempted=true;
-    char exe[PATH_MAX],helper[PATH_MAX],wad[PATH_MAX],config[PATH_MAX];
+    char exe[PATH_MAX],helper[PATH_MAX],wad[PATH_MAX],patch[PATH_MAX],config[PATH_MAX],settings[PATH_MAX];
+    g_freedoom_error[0]=0;
     uint32_t size=sizeof(exe);
     if(_NSGetExecutablePath(exe,&size)!=0)return false;
     char *slash=strrchr(exe,'/');if(!slash)return false;*slash=0;
     snprintf(helper,sizeof(helper),"%s/mk1-freedoom",exe);
     snprintf(wad,sizeof(wad),"%s/../Resources/freedoom/freedoom1.wad",exe);
     if(access(helper,X_OK)||access(wad,R_OK)){BLOG("Freedoom: missing helper or WAD");return false;}
+    const char *settings_override=getenv("MK1_DOOM_CONFIG_PATH"),*user_home=getenv("HOME");
+    if(settings_override)snprintf(settings,sizeof(settings),"%s",settings_override);
+    else snprintf(settings,sizeof(settings),"%s/Library/Application Support/MK1 Revive/doom.plist",user_home?user_home:"");
+    doom_wad_info start;
+    if(!doom_wad_settings(settings,wad,sizeof(wad),patch,&start,g_freedoom_error,sizeof(g_freedoom_error))){
+        BLOG("Doom: %s",g_freedoom_error);return false;
+    }
     snprintf(g_freedoom_path,sizeof(g_freedoom_path),"/tmp/mk1-freedoom-XXXXXX");
     int fd=mkstemp(g_freedoom_path);
     if(fd<0)return false;
@@ -48,8 +58,9 @@ static bool start_freedoom(void)
     close(fd);if(map==MAP_FAILED){unlink(g_freedoom_path);return false;}
     g_freedoom_shared=map;memset(map,0,sizeof(*g_freedoom_shared));
     g_freedoom_shared->magic=MK1_DOOM_MAGIC;g_freedoom_shared->owner_pid=(uint32_t)getpid();
-    const char *home=getenv("HOME");
-    if(home){
+    const char *home=getenv("HOME"),*data_root=getenv("MK1_DOOM_DATA_DIR");
+    if(data_root){mkdir(data_root,0700);snprintf(config,sizeof(config),"%s/default.cfg",data_root);}
+    else if(home){
         snprintf(config,sizeof(config),"%s/Library/Application Support/MK1 Revive",home);mkdir(config,0700);
         snprintf(config,sizeof(config),"%s/Library/Application Support/MK1 Revive/Freedoom",home);mkdir(config,0700);
         snprintf(config,sizeof(config),"%s/Library/Application Support/MK1 Revive/Freedoom/default.cfg",home);
@@ -60,14 +71,23 @@ static bool start_freedoom(void)
     if(!env){stop_freedoom();g_freedoom_attempted=true;return false;}
     size_t n=0;for(size_t i=0;i<nenv;i++)if(strncmp(environ[i],"MK1_DOOM_SHARED=",16)!=0)env[n++]=environ[i];
     char envpath[PATH_MAX+32];snprintf(envpath,sizeof(envpath),"MK1_DOOM_SHARED=%s",g_freedoom_path);env[n]=envpath;
-    char *argv[]={helper,"-iwad",wad,"-warp","1","1","-skill","2","-nosound","-nomusic","-config",config,NULL};
+    char episode[8],mapnumber[8];snprintf(episode,sizeof(episode),"%d",start.episode);snprintf(mapnumber,sizeof(mapnumber),"%d",start.map);
+    char *argv[24];int argc=0;
+    argv[argc++]=helper;argv[argc++]="-iwad";argv[argc++]=wad;
+    if(patch[0]){argv[argc++]="-file";argv[argc++]=patch;}
+    argv[argc++]="-warp";
+    if(!start.commercial)argv[argc++]=episode;
+    argv[argc++]=mapnumber;
+    argv[argc++]="-skill";argv[argc++]="2";argv[argc++]="-nosound";argv[argc++]="-nomusic";
+    argv[argc++]="-config";argv[argc++]=config;argv[argc]=NULL;
     posix_spawn_file_actions_t actions;posix_spawn_file_actions_init(&actions);
-    posix_spawn_file_actions_addopen(&actions,STDOUT_FILENO,"/tmp/maschine-mk1-revive/freedoom.log",O_WRONLY|O_CREAT|O_TRUNC,0600);
+    char logfile[PATH_MAX];snprintf(logfile,sizeof(logfile),"%s/freedoom.log",data_root?data_root:"/tmp/maschine-mk1-revive");
+    posix_spawn_file_actions_addopen(&actions,STDOUT_FILENO,logfile,O_WRONLY|O_CREAT|O_TRUNC,0600);
     posix_spawn_file_actions_adddup2(&actions,STDOUT_FILENO,STDERR_FILENO);
     int err=posix_spawn(&g_freedoom_pid,helper,&actions,NULL,argv,env);
     posix_spawn_file_actions_destroy(&actions);free(env);
     if(err){g_freedoom_pid=0;stop_freedoom();g_freedoom_attempted=true;BLOG("Freedoom spawn failed: %d",err);return false;}
-    BLOG("Freedoom: real Doom engine started pid=%d, Freedoom 0.13.0 Phase 1 E1M1",g_freedoom_pid);
+    BLOG("Doom: engine started pid=%d, base=%s, add-on=%s, map=%d/%d",g_freedoom_pid,wad,patch[0]?patch:"none",start.episode,start.map);
     return true;
 }
 static void freedoom_encoder(uint32_t index,float delta,uint64_t now)
@@ -80,7 +100,7 @@ static bool freedoom_frame(uint8_t *fb,uint32_t pads,uint64_t now)
 {
     if(!g_freedoom_shared)return false;
     if(g_freedoom_pid>0&&waitpid(g_freedoom_pid,NULL,WNOHANG)==g_freedoom_pid){
-        g_freedoom_pid=0;BLOG("Freedoom: engine exited; see freedoom.log");return false;
+        g_freedoom_pid=0;snprintf(g_freedoom_error,sizeof(g_freedoom_error),"Doom engine exited; check freedoom.log");BLOG("%s",g_freedoom_error);return false;
     }
     uint32_t keys=pads;
     if(now<g_freedoom_turn_until)keys|=g_freedoom_turn_key;

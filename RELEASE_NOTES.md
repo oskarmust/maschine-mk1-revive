@@ -19,15 +19,19 @@ The fixes decode pad reports by their embedded pad IDs, preserve releases, corre
 
 Somehow, we also couldn't find Doom running on the controller. Clearly an oversight. Doom support has therefore been restored — using the Doom engine and Freedoom data, with gameplay on the left display and the original status bar on the right.
 
-## What is included
+## New in 0.4.0-beta.2
 
-MK1 Revive 0.4.0-beta.1 adds Controller Studio with live MK1 pad/encoder/button monitoring, per-pad thresholds and gain, encoder direction/gain, and pad/encoder destination overrides. The helper includes a game launcher and a new app/menu-bar icon.
+The helper's **Games…** view can now select a custom Doom WAD. IWADs replace the
+base game; PWADs load as add-ons. Choices are validated, copied to Application
+Support and saved for the next launch. Restore bundled Freedoom or remove only
+the add-on with separate controls. The launcher passes paths as arguments,
+selects the custom map and reports startup failures. Classic IWAD/PWAD files up
+to 256 MiB; no PK3 or GZDoom-only extensions.
 
-Idle games now include Pong, Freedoom and Breakout. Hardware arrows select games; each Pong paddle switches to AI after ten seconds without input. Freedoom uses the left LCD for gameplay and the right for the original status bar, with illuminated physical pad controls. This release also includes the USB pad decoding and display update fixes.
+Includes the existing Controller Studio, physical pad/display fixes, Pong,
+Freedoom, Breakout, ten-second Pong AI handoff and SPITE documentation.
 
-
-
-Validation: release build, pad decoder and LED tests, display regression, game selection and AI handoff tests, profile validation, and real Freedoom movement/firing/status-bar smoke test passed locally. Helper-to-hardware game launch was checked live. Automated tests do not replace musical latency or extended hardware testing.
+Validation: custom IWAD+PWAD production-launcher test (real E1M2 scene, HUD and replacement-map spawn position), WAD validation/picker tests, release build, pad decoder and LED tests, display regression, game selection and AI handoff tests, profile validation, and real Freedoom movement/firing/status-bar smoke test passed locally. Helper-to-hardware game launch was checked live. Automated tests do not replace musical latency or extended hardware testing.
 
 The source archive includes the pinned GPL Doom engine sources and the MK1 backend. Freedoom data license/credits are bundled. Original MK1 Revive author: andy83-projects. See NOTICE.md for component licensing details.
 
@@ -47,10 +51,10 @@ kernel extension or DriverKit.** Those are not installation steps.
 
 ### 2. Download the app ZIP
 
-Open [release v0.4.0-beta.1](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.1)
+Open [release v0.4.0-beta.2](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.2)
 and expand **Assets** if needed. Download:
 
-**[maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip](https://github.com/oskarmust/maschine-mk1-revive/releases/download/v0.4.0-beta.1/maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip)**
+**[maschine-mk1-revive-v0.4.0-beta.2-macos-arm64.zip](https://github.com/oskarmust/maschine-mk1-revive/releases/download/v0.4.0-beta.2/maschine-mk1-revive-v0.4.0-beta.2-macos-arm64.zip)**
 
 Choose the file ending in **`macos-arm64.zip`**. The `source.zip` and GitHub's
 “Source code” links are for development; they are not the installable app.
@@ -111,6 +115,22 @@ UI to open when you log in.
 - Pong gives each idle player to AI after 10 seconds. Turning that player's
   encoder takes control again. Freedoom uses the left LCD for gameplay and
   the right LCD for the original status bar; this beta has no Freedoom audio.
+
+### Choosing a custom Doom WAD
+
+In **Games…**, choose **Choose custom WAD…**:
+
+- An **IWAD** becomes the base game and clears the previous add-on.
+- A **PWAD** is loaded as an add-on over the current base game. Doom II map
+  packs need a compatible Doom II-style IWAD; the bundled Freedoom is Phase 1.
+- **Remove add-on** keeps your selected base. **Use bundled Freedoom** resets
+  both choices to the included game data.
+
+The selected WAD is validated and copied into your user Application Support
+folder. Changes apply on the next Doom launch; an active Doom session returns
+to game selection. Choose **Play Freedoom** to launch the selected configuration.
+Classic Doom IWAD/PWAD files up to 256 MiB are supported; PK3 files and mods
+requiring GZDoom features are not. No custom game data is downloaded or bundled.
 
 ### Updating an existing copy
 

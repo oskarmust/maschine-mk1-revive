@@ -18,7 +18,7 @@ the fixes and features below; the original work and its authors remain credited.
 
 [![Buy Me a Coffee — andy83](docs/badges/support-andy83.svg)](https://buymeacoffee.com/andy83)
 
-[Download v0.4.0-beta.1](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.1)
+[Download v0.4.0-beta.2](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.2)
 · [Installation](#installation) · [Screenshots](#screenshots)
 
 ## Why this fork exists
@@ -45,10 +45,10 @@ kernel extension or DriverKit.** Those are not installation steps.
 
 ### 2. Download the app ZIP
 
-Open [release v0.4.0-beta.1](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.1)
+Open [release v0.4.0-beta.2](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.2)
 and expand **Assets** if needed. Download:
 
-**[maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip](https://github.com/oskarmust/maschine-mk1-revive/releases/download/v0.4.0-beta.1/maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip)**
+**[maschine-mk1-revive-v0.4.0-beta.2-macos-arm64.zip](https://github.com/oskarmust/maschine-mk1-revive/releases/download/v0.4.0-beta.2/maschine-mk1-revive-v0.4.0-beta.2-macos-arm64.zip)**
 
 Choose the file ending in **`macos-arm64.zip`**. The `source.zip` and GitHub's
 “Source code” links are for development; they are not the installable app.
@@ -110,6 +110,22 @@ UI to open when you log in.
   encoder takes control again. Freedoom uses the left LCD for gameplay and
   the right LCD for the original status bar; this beta has no Freedoom audio.
 
+### Choosing a custom Doom WAD
+
+In **Games…**, choose **Choose custom WAD…**:
+
+- An **IWAD** becomes the base game and clears the previous add-on.
+- A **PWAD** is loaded as an add-on over the current base game. Doom II map
+  packs need a compatible Doom II-style IWAD; the bundled Freedoom is Phase 1.
+- **Remove add-on** keeps your selected base. **Use bundled Freedoom** resets
+  both choices to the included game data.
+
+The selected WAD is validated and copied into your user Application Support
+folder. Changes apply on the next Doom launch; an active Doom session returns
+to game selection. Choose **Play Freedoom** to launch the selected configuration.
+Classic Doom IWAD/PWAD files up to 256 MiB are supported; PK3 files and mods
+requiring GZDoom features are not. No custom game data is downloaded or bundled.
+
 ### Updating an existing copy
 
 1. Save your MASCHINE project and quit MASCHINE.
@@ -151,6 +167,10 @@ Open **Controller Studio** from the menu bar to see live pads, encoders and
 buttons in a matching MK1 layout. Select a pad or encoder to edit its enable
 state, gain and MASCHINE destination; pads also support threshold overrides,
 and encoders support direction inversion. Release held pads before applying.
+The Games view also has **Choose custom WAD…** for a base IWAD or add-on PWAD,
+plus **Remove add-on** and **Use bundled Freedoom**. WAD choices persist between
+launches. See the [custom WAD instructions](#choosing-a-custom-doom-wad).
+
 Profiles live in `~/Library/Application Support/MK1 Revive/controls.plist`.
 The existing global settings remain available in the same window.
 
@@ -180,6 +200,11 @@ direction or override its MASCHINE destination.
 MASCHINE is not using the controller. The hardware arrows also select games.
 
 ![Game launcher with Pong, Freedoom and Breakout](docs/screenshots/game-launcher.png)
+
+**Custom Doom WADs** — choose a base IWAD or add-on PWAD, remove the add-on,
+or restore bundled Freedoom. The selected files are copied and remembered.
+
+![Games view with a custom Doom PWAD selected](docs/screenshots/custom-wad.png)
 
 ### Games on the displays
 

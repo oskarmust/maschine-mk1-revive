@@ -13,10 +13,10 @@ kernel extension or DriverKit.** Those are not installation steps.
 
 ### 2. Download the app ZIP
 
-Open [release v0.4.0-beta.1](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.1)
+Open [release v0.4.0-beta.2](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.2)
 and expand **Assets** if needed. Download:
 
-**[maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip](https://github.com/oskarmust/maschine-mk1-revive/releases/download/v0.4.0-beta.1/maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip)**
+**[maschine-mk1-revive-v0.4.0-beta.2-macos-arm64.zip](https://github.com/oskarmust/maschine-mk1-revive/releases/download/v0.4.0-beta.2/maschine-mk1-revive-v0.4.0-beta.2-macos-arm64.zip)**
 
 Choose the file ending in **`macos-arm64.zip`**. The `source.zip` and GitHub's
 “Source code” links are for development; they are not the installable app.
@@ -77,6 +77,22 @@ UI to open when you log in.
 - Pong gives each idle player to AI after 10 seconds. Turning that player's
   encoder takes control again. Freedoom uses the left LCD for gameplay and
   the right LCD for the original status bar; this beta has no Freedoom audio.
+
+### Choosing a custom Doom WAD
+
+In **Games…**, choose **Choose custom WAD…**:
+
+- An **IWAD** becomes the base game and clears the previous add-on.
+- A **PWAD** is loaded as an add-on over the current base game. Doom II map
+  packs need a compatible Doom II-style IWAD; the bundled Freedoom is Phase 1.
+- **Remove add-on** keeps your selected base. **Use bundled Freedoom** resets
+  both choices to the included game data.
+
+The selected WAD is validated and copied into your user Application Support
+folder. Changes apply on the next Doom launch; an active Doom session returns
+to game selection. Choose **Play Freedoom** to launch the selected configuration.
+Classic Doom IWAD/PWAD files up to 256 MiB are supported; PK3 files and mods
+requiring GZDoom features are not. No custom game data is downloaded or bundled.
 
 ### Updating an existing copy
 
