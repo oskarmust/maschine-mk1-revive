@@ -1,8 +1,25 @@
-> Fork maintained by [oskarmust](https://github.com/oskarmust), based on
-> [andy83-projects/maschine-mk1-revive](https://github.com/andy83-projects/maschine-mk1-revive).
-> Apple Silicon beta: macOS 14 or later. Physical MK1 hardware is required.
+# MK1 Revive — out of SPITE
 
-Support development of this fork: [Buy me a coffee ☕](https://buymeacoffee.com/muumin1nja).
+**SPITE: Saving Products Intended To Expire.**
+
+A perfectly useful MASCHINE MK1 deserves more music, not a retirement date.
+So we did it out of SPITE: a userspace controller bridge for Apple Silicon Macs,
+with input/display fixes, Controller Studio, and the restored Doom support.
+
+This fork builds on **[Andy83's original MK1 Revive](https://github.com/andy83-projects/maschine-mk1-revive)**.
+Andy's userspace USB and MASCHINE integration made this possible. This fork adds
+the fixes and features below; the original work and its authors remain credited.
+
+**Support this fork — muumin1nja**
+
+[![Buy Me a Coffee — muumin1nja](docs/badges/support-muumin1nja.svg)](https://buymeacoffee.com/muumin1nja)
+
+**Support the original project — Andy83**
+
+[![Buy Me a Coffee — andy83](docs/badges/support-andy83.svg)](https://buymeacoffee.com/andy83)
+
+[Download v0.4.0-beta.1](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.1)
+· [Installation](#installation) · [Screenshots](#screenshots)
 
 ## Why this fork exists
 
@@ -11,6 +28,122 @@ This started as a repair job for a real MASCHINE MK1. Pads sometimes failed to r
 The fixes decode pad reports by their embedded pad IDs, preserve releases, correct physical control/LED mappings, and retain all pending display updates, including black clears. Controller Studio now follows the MK1 layout and makes input, sensitivity and mapping adjustments visible.
 
 Somehow, we also couldn't find Doom running on the controller. Clearly an oversight. Doom support has therefore been restored — using the Doom engine and Freedoom data, with gameplay on the left display and the original status bar on the right.
+
+<!-- INSTALL:START -->
+## Installation
+
+### 1. Check the requirements
+
+- An **Apple Silicon Mac** (M-series), running **macOS 14 or later**.
+- A **Native Instruments MASCHINE MK1** and a working USB data connection.
+- MASCHINE desktop software installed separately if you want DAW integration.
+  This download does not include MASCHINE software or NI sound libraries.
+- This release is a **macOS beta**, not an Intel, Windows or iPadOS build.
+
+**Installing the ready-made app does not require Xcode, Python, Homebrew, a
+kernel extension or DriverKit.** Those are not installation steps.
+
+### 2. Download the app ZIP
+
+Open [release v0.4.0-beta.1](https://github.com/oskarmust/maschine-mk1-revive/releases/tag/v0.4.0-beta.1)
+and expand **Assets** if needed. Download:
+
+**[maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip](https://github.com/oskarmust/maschine-mk1-revive/releases/download/v0.4.0-beta.1/maschine-mk1-revive-v0.4.0-beta.1-macos-arm64.zip)**
+
+Choose the file ending in **`macos-arm64.zip`**. The `source.zip` and GitHub's
+“Source code” links are for development; they are not the installable app.
+Downloads are public and do not require a GitHub account.
+
+Optional integrity check: download **SHA256SUMS** from the same release, run
+`shasum -a 256` on the app ZIP, and compare its hash with the matching filename
+in that file.
+
+### 3. Put the app in Applications
+
+1. Double-click the downloaded ZIP in Finder to extract it.
+2. Drag **MK1 Revive.app** into **Applications** (`/Applications`).
+3. Launch that copy from Applications. Do this before opening it for the first
+   time: the background bridge is registered using the app's installed path.
+
+Do not run the app directly from Downloads or from inside an archive preview.
+For an existing installation, use the update steps below first.
+
+### 4. Complete the first launch
+
+This beta is **ad hoc signed and not notarized**. If macOS blocks the app, first
+confirm that you downloaded the ZIP from this repository's release. After trying
+to open it, go to **System Settings → Privacy & Security → Open Anyway**, then
+confirm **Open** if you choose to trust it. Follow
+[Apple's app-opening guidance](https://support.apple.com/en-us/102445).
+
+On the first launch, MK1 Revive automatically creates its user LaunchAgent and
+starts the background bridge. Look for the MK1 Revive icon in the **macOS menu
+bar**; a permanent Dock icon is not required.
+
+### 5. Verify the controller connection
+
+1. Connect the MK1 using a working USB data cable.
+2. Open the menu-bar icon and check for **● Running**. If stopped, choose **Start**.
+3. Choose **Controller Studio…**. Check that it reports **MK1 connected**.
+4. Hit a pad and turn an encoder. The matching control should highlight and its
+   pressure/value should change in the window.
+5. Open or restart MASCHINE desktop software with the bridge running. Check its
+   controller selection and select the MK1 if necessary.
+
+**Running** means the service is alive; **MK1 connected** confirms that the
+hardware was found. Neither alone proves that MASCHINE is receiving input.
+Check a real pad response in the software. Audio input/output selection remains
+in MASCHINE's normal audio preferences.
+
+Optional: enable **Launch at Login** in the menu-bar app if you want the helper
+UI to open when you log in.
+
+### 6. Try the added features
+
+- **Controller Studio…** shows live pads, buttons and encoders. Select a pad or
+  encoder to adjust its supported sensitivity/mapping settings, then choose
+  **Apply live**. Release held pads before applying changes.
+- Choose **Games…** when MASCHINE is not using the controller. Select Pong,
+  Freedoom or Breakout in the helper, or use the hardware arrows under
+  Browse/Sampling. **Play** starts a game; **Browse** returns to selection.
+- Pong gives each idle player to AI after 10 seconds. Turning that player's
+  encoder takes control again. Freedoom uses the left LCD for gameplay and
+  the right LCD for the original status bar; this beta has no Freedoom audio.
+
+### Updating an existing copy
+
+1. Save your MASCHINE project and quit MASCHINE.
+2. In MK1 Revive's menu, choose **Stop**, then **Quit**. Quitting the helper alone
+   does not unload the background bridge.
+3. Replace `/Applications/MK1 Revive.app` with the app from the new ZIP.
+4. Launch the new app from Applications. Choose **Start** if the service is stopped,
+   then repeat the controller check above and reopen MASCHINE.
+
+Normal updates do not require deleting your settings or reinstalling MASCHINE.
+Do not run the old and new bridge copies together.
+
+### If something does not respond
+
+- **Service stopped:** choose **Start** or **Restart** from the menu-bar app.
+- **Service running, hardware missing:** reconnect the data cable and try another
+  USB port/adapter, then check Controller Studio again.
+- **Hardware reacts in Studio, MASCHINE does not:** restart MASCHINE after the
+  bridge is running and check controller selection.
+- **Games unavailable:** MASCHINE may be using the controller. Save and quit it,
+  then retry Games.
+
+For an issue report, include your macOS/MASCHINE versions, controller connection
+state and relevant files from `/tmp/maschine-mk1-revive/`. Do not publish private
+project files or unrelated logs.
+
+### Uninstalling
+
+Choose **Stop**, disable **Launch at Login** if enabled, then **Quit**. Move
+`/Applications/MK1 Revive.app` to Trash. In Finder's **Go → Go to Folder…**, open
+`~/Library/LaunchAgents/` and remove **only** `com.dragco.mk1-bridge.plist` to
+prevent it loading at login. Keep settings unless you explicitly want a reset:
+`~/Library/Application Support/MK1 Revive/` contains your controller profile.
+<!-- INSTALL:END -->
 
 ## Controller Studio and idle games
 
@@ -67,65 +200,29 @@ status bar there.
 
 ![Freedoom gameplay on the left display and original Doom status bar on the right](docs/screenshots/freedoom.png)
 
-## Building this fork
+## Building from source (developers only)
 
-Install Apple's Command Line Tools (`xcode-select --install`), Python 3 and Git.
-Full Xcode is optional. Clone recursively, then run:
+Apple Silicon/macOS 14+, Apple's Command Line Tools (`xcode-select --install`),
+Python 3 and Git are required. **Full Xcode is optional for this macOS project.**
+Building is unnecessary if you install the release ZIP above.
 
 ```sh
-git submodule update --init --recursive
+git clone --recurse-submodules https://github.com/oskarmust/maschine-mk1-revive.git
+cd maschine-mk1-revive
 sh scripts/build-release-assets.sh
 sh scripts/test.sh
 ```
 
-The build downloads the pinned Freedoom 0.13.0 WAD and validates its SHA-256.
-The app ZIP is in `dist/`; drag the app to Applications and launch it.
-These beta builds use ad hoc signing and are not notarized. The engine's
-GPL source and Freedoom license/credits are retained in this repository and
-app bundle. See [NOTICE.md](NOTICE.md) for component attribution.
+For an existing clone, run `git submodule update --init --recursive` first.
+The build fetches the pinned Freedoom 0.13.0 WAD and checks its SHA-256.
+The app is `build/MK1 Revive.app`; release ZIPs are in `dist/`. Install the app
+using the same Applications/first-launch steps above. Engine GPL sources and
+Freedoom license/credits are retained; see [NOTICE.md](NOTICE.md).
 
----
+For bridge development after building:
 
-# maschine-mk1-revive
-
-Userspace driver for the Native Instruments Maschine MK1 on Apple Silicon macOS — no kext, no DriverKit, no special entitlements.
-
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-andy83-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/andy83)
-
-## What works
-
-- Maschine software detects the MK1 in its controller list
-- Both displays render correctly (170×64 grayscale, ST7529)
-- All LEDs: pad rubber, group A–H, transport, scene-row, screen area (SA1–SA8)
-- Pad input with velocity and pressure; sustain gate eliminates stuck notes
-- All buttons and transport controls
-- All 11 encoders (Volume, Tempo, Swing + 8 screen area), with jitter and crosstalk filtering
-- Physical DIN MIDI Out (hardware-verified); DIN MIDI In (untested)
-- USB hot-plug: survives unplug/replug; starts before device is connected
-- **MK1 Revive** menu bar app: start/stop/restart the bridge, adjust settings
-
-## Install
-
-Download `maschine-mk1-revive-vX.X.X-macos.zip` from [Releases](https://github.com/andy83-projects/maschine-mk1-revive/releases), unzip, and drag **MK1 Revive** to `/Applications`.
-
-Launch **MK1 Revive** — on first launch it automatically installs the LaunchAgent and starts the bridge.
-
-### If macOS blocks the app
-
-Right-click → Open, or go to `System Settings → Privacy & Security` and allow it. If the app is quarantined after unzipping:
-
-```bash
-xattr -dr com.apple.quarantine "/Applications/MK1 Revive.app"
-```
-
-Then launch the app normally.
-
-### Uninstall
-
-```bash
-launchctl bootout "gui/$(id -u)" ~/Library/LaunchAgents/com.dragco.mk1-bridge.plist 2>/dev/null || true
-rm -f ~/Library/LaunchAgents/com.dragco.mk1-bridge.plist
-sudo rm -rf "/Applications/MK1 Revive.app"
+```sh
+./build/Release/mk1-bridge --help
 ```
 
 ## Configuration
@@ -166,21 +263,6 @@ Use the **Settings…** panel in the MK1 Revive menu bar app, or set environment
 | `MK1_PAD_TRACE` | off | Log pad event send results to `timing.log`, without tracing every USB transfer |
 | `MK1_PAD_CAPTURE` | unset | Path for a circular raw EP4 capture before filtering; 72-byte records (LE uptime ns + 64 raw bytes), limited to 16 MiB; sort by timestamp after wrap |
 
-## Build
-
-Requires Xcode 15+ on Apple Silicon macOS 14+.
-
-```bash
-xcodebuild -project maschine-mk1-revive.xcodeproj -scheme mk1-bridge -configuration Debug build
-bash mk1-menubar/build.sh   # builds MK1 Revive.app → build/MK1 Revive.app
-```
-
-Run directly for development:
-
-```bash
-./build/Debug/mk1-bridge [--display_tick_ms=16] [--no-partial-display] [--help]
-```
-
 ## How it works
 
 The MK1 originally required `NIUSBMaschineController.kext` — a kernel extension that never received an ARM64 build. This project replaces it entirely in userspace.
@@ -209,7 +291,7 @@ The MK1 originally required `NIUSBMaschineController.kext` — a kernel extensio
 - **[fzero/maschine-mk1](https://github.com/fzero/maschine-mk1)** — MK1 HID protocol on Linux; confirms VID `0x17CC` / PID `0x0808`.
 - **[hansfbaier/open-maschine](https://github.com/hansfbaier/open-maschine)** — MK2 proof-of-concept using hidapi.
 
-## Changelog
+## Upstream changelog (before this fork)
 
 ### v0.3.3 — 2026-04-24
 - Fix invisible tractor beam in idle animation — grey pixel values render as black on this display; replaced with white alternating scanlines
@@ -232,64 +314,3 @@ The MK1 originally required `NIUSBMaschineController.kext` — a kernel extensio
 ### v0.2.0 — 2026-04-14
 - MK1 Revive menu bar app: service management and settings panel
 - Runtime-configurable pad thresholds and encoder sensitivity via env vars
-
-### Idle games, clock and Freedoom
-
-Turn the **third encoder below the left display** to select **Pong / Freedoom**;
-**Play** starts the selected game. **Browse** returns to selection; **Restart**
-starts the selected game over.
-
-- Pong: encoder 1 controls the left paddle. Encoder 4 controls the right paddle
-  and switches it from AI to a second player.
-- Freedoom: the real doomgeneric engine runs Freedoom Phase 1 0.13.0 (E1M1).
-  Pads 14/10 move forward/back (W/S), pads 9/11 turn left/right (A/D),
-  pad 12 fires, pad 16 uses doors/switches. Pads 13/15 strafe left/right, so the
-  game is fully playable using pads. Encoder 1 also turns and encoder 4 moves
-  forward/back. Pads 1–4 select weapons, pad 5 confirms menus, pad 6 toggles the automap.
-  Play also fires. This first backend has no audio.
-  WASD pads light at level 40/63, strafe pads 13/15 at 12/63, fire at 63/63,
-  and use at 28/63; active presses brighten lit controls to 63/63.
-  Unused pads remain off. Game selection lights Play; Pong clears pad indicators.
-  The idle lighting does not modify the cached Maschine LED state.
-  Physical pad numbering is calibrated separately from USB IDs: idle input
-  flips the USB's top-first row order to the printed bottom-first numbering
-  (zero-based physical index = USB ID XOR 12). Normal Maschine forwarding
-  retains its native USB pad numbering. Calibration is recorded in
-  `diagnostics/20261025-idle-pad-layout/`.
-- During Freedoom, the engine renders its native 320x168 playfield and 320x32
-  status bar. These are separated and independently scaled to the two LCDs:
-  left = game only; right = original Freedoom status-bar artwork (face, health,
-  armor, ammo, weapons and keys). Both images come from the same engine frame.
-  A cached frame avoids loading-screen flashes when a shared-memory update is in flight.
-  During Pong and game selection, the right LCD shows local time and date.
-
-The Doom subprocess starts only when selected. It is stopped and reaped when
-returning to selection, starting Pong, restarting, or receiving Maschine display
-content. It also exits if its parent bridge dies. Shared-framebuffer files are
-private and removed on shutdown. The game itself ticks at Doom's native rate;
-the bridge samples its grayscale framebuffer at 20 Hz. HUD and clock USB writes
-are suppressed when unchanged; static menus redraw only on selection changes.
-Idle controls are consumed locally rather than forwarded to Maschine.
-
-Build the game helper with `python3 scripts/build-freedoom.py`. The menu-bar app
-packaging script includes it and the WAD/license files. Upstream engine sources,
-revision and licenses are documented in `third_party/README.md`.
-
-Checks from the project directory:
-
-```sh
-clang -Wall -Wextra tests/test_idle_pong.c -o /tmp/test-idle-pong
-/tmp/test-idle-pong
-clang -O2 -Wall -Wextra -fsanitize=undefined tests/test_idle_games.c -o /tmp/test-idle-games
-/tmp/test-idle-games
-python3 tests/test_display_updates.py
-python3 tests/test_freedoom_runtime.py
-python3 tests/test_freedoom_keys.py
-clang -O2 -Wall -Wextra tests/test_idle_game_leds.c -o /tmp/test-idle-game-leds
-/tmp/test-idle-game-leds
-```
-
-The real-engine smoke test validates WAD rendering, actual player-coordinate
-movement, firing/ammo consumption, native status-bar pixels and HUD telemetry. The production client
-lifecycle test is in `tests/test_freedoom_client.c` (run from a bundle layout
-containing the helper and Resources/freedoom directory).
