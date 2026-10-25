@@ -197,7 +197,7 @@ func makeMenuBarIcon() -> NSImage? {
     if let url = Bundle.main.url(forResource: "menubar", withExtension: "png"),
        let img = NSImage(contentsOf: url),
        isUsableStatusImage(img) {
-        img.isTemplate = false
+        img.isTemplate = true
         print("[mk1-menubar] using bundled menubar icon: \(url.path)")
         return img
     }
@@ -699,6 +699,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.delegate = self
         statusItem.menu = menu
+        if CommandLine.arguments.contains("--studio") || !UserDefaults.standard.bool(forKey:"studioSeen") {
+            UserDefaults.standard.set(true,forKey:"studioSeen");ControllerStudio.shared.show()
+        }
+    }
+    func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows flag:Bool)->Bool {
+        ControllerStudio.shared.show();return true
     }
 
     // Rebuild the menu fresh each time it opens so status is always current.
@@ -740,6 +746,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        let studio=NSMenuItem(title:"Controller Studio…",action:#selector(studioTapped),keyEquivalent:"t")
+        studio.target=self;menu.addItem(studio)
+        let games=NSMenuItem(title:"Games…",action:#selector(gamesTapped),keyEquivalent:"g")
+        games.target=self;menu.addItem(games)
         // Settings panel
         let settings = NSMenuItem(title: "Settings\u{2026}", action: #selector(settingsTapped), keyEquivalent: ",")
         settings.target = self
@@ -760,6 +770,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Run restart off the main thread so the menu closes first
         DispatchQueue.global().async { restartService() }
     }
+    @objc private func studioTapped(){ControllerStudio.shared.show()}
+    @objc private func gamesTapped(){ControllerStudio.shared.show(games:true)}
     @objc private func settingsTapped() { SettingsWindowController.shared.show() }
     @objc private func launchAtLoginTapped() { setLoginItem(!loginItemEnabled()) }
 }

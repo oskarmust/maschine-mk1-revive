@@ -4,19 +4,16 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-0.4.0-beta.1}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 OUT_DIR="${REPO_ROOT}/dist"
-ZIP_DEST="${OUT_DIR}/maschine-mk1-revive-v${VERSION}-macos.zip"
+ZIP_DEST="${OUT_DIR}/maschine-mk1-revive-v${VERSION}-macos-arm64.zip"
 
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mk1-bridge-release-assets.XXXXXX")"
 trap 'rm -rf "${STAGE_DIR}"' EXIT INT TERM
 
-# Build bridge binary then bundle it inside the app
-xcodebuild -project "${REPO_ROOT}/maschine-mk1-revive.xcodeproj" \
-    -scheme mk1-bridge \
-    -configuration "${CONFIGURATION}" \
-    build
+# Command Line Tools are enough; full Xcode is optional.
+CONFIGURATION="${CONFIGURATION}" sh "${REPO_ROOT}/scripts/build-bridge.sh"
 
 CONFIGURATION="${CONFIGURATION}" bash "${REPO_ROOT}/mk1-menubar/build.sh"
 

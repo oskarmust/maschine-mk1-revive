@@ -46,7 +46,20 @@ for the LED IPC→EP1 payload translation.
 - **EP4 (0x04/0x84)** — bulk in/out, high-bandwidth (audio/pad data)
 - **EP8 (0x08)** — bulk out, **all display traffic only**
 
-### EP4 pad input format (confirmed from live hardware testing 2026-04-06)
+### EP4 pad input correction (local capture, 2026-10-24)
+
+Each little-endian 16-bit word contains a pad ID in its top nibble and a
+12-bit pressure value in its lower bits. The first word is NOT always pad 0:
+36,522 captured reports include sustained pressure with start IDs 5 and 13.
+Decode by ID, never by word position. Both ADC passes may be identical even
+during a strike; they are still pad data. Zero-pressure frames must reach the
+pad callback so held notes can release. Do not subtract an initial report as
+calibration: the top nibble is an ID, not a resting ADC offset.
+
+The earlier fixed-order/baseline assumptions below are superseded by this
+capture and the decoder in `mk1-usb/mk1_device.c`.
+
+### Earlier EP4 interpretation (superseded 2026-10-24)
 - 64-byte reports at ~700 Hz; no report-ID prefix byte
 - Layout: `[pad0_lo, pad0_hi, pad1_lo, pad1_hi, ..., pad15_lo, pad15_hi, <32-byte duplicate channel B>]`
 - Channel A = bytes 0–31: 16 × LE uint16 pressure values, one per pad

@@ -1,0 +1,18 @@
+name: Apple Silicon app
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: sh scripts/build-release-assets.sh
+      - run: sh scripts/test.sh
+        if: runner.arch == 'ARM64'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mk1-revive-macos-arm64
+          path: dist/*.zip

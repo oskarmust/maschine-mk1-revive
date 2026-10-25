@@ -22,6 +22,10 @@
 #include <dispatch/dispatch.h>
 
 #include "bridge.h"
+#include "idle_games.h"
+#include "idle_game_leds.h"
+#include "idle_pad_layout.h"
+#include <stdatomic.h>
 #include "mk1_server.h"
 #include "../mk1-usb/mk1_device.h"
 #include "../mk1-ipc/mk1_ipc.h"
@@ -61,6 +65,7 @@ static log_file_t g_log_timing  = {0};
 // their log files as usual.
 static bool g_quiet = false;
 static bool g_timing_trace = false;
+static bool g_pad_trace = false;
 static pid_t g_spawned_maschine_pid = -1;
 static bool g_aux_mode_started = false;
 
@@ -261,6 +266,8 @@ static size_t g_last_led_logical_len = 0;
 static bool g_guided_mode_only = false;
 static int g_open_retry_budget = 0;
 static bool g_midi_warned_no_usb = false;
+
+#include "input_profile.h"
 
 static void sig_handler(int sig) { (void)sig; g_running = 0; CFRunLoopStop(CFRunLoopGetMain()); }
 static void maybe_start_guided_mode(bridge_t *br);
@@ -565,8 +572,16 @@ static uint16_t g_display_byte_x_start[DISPLAY_COUNT] = {0};
 static uint16_t g_display_byte_x_end[DISPLAY_COUNT] = {0};
 static bool g_display_have_region[DISPLAY_COUNT] = {0};
 static dispatch_source_t g_display_flush_timer = NULL;
-static dispatch_source_t g_cat_anim_timer      = NULL;
-static int               g_cat_anim_frame      = 0;
+static dispatch_source_t g_idle_timer      = NULL;
+static idle_games_t g_idle_games;
+static atomic_uint g_idle_pad_mask = 0;
+static atomic_bool g_idle_active = false;
+static uint64_t g_idle_last_ns;
+static time_t g_idle_clock_second = (time_t)-1;
+static int g_idle_menu_drawn = -1;
+static uint8_t g_idle_right_frame[DISPLAY_FB_BYTES];
+static uint8_t g_idle_led_packet[33];
+static bool g_idle_led_valid;
 static dispatch_queue_t g_display_flush_queue = NULL;
 static bool g_display_flush_active = false;
 static pthread_mutex_t g_display_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -598,7 +613,7 @@ static void flush_display_updates(bridge_t *br);
 static void start_display_flush_timer(bridge_t *br);
 
 // ---------------------------------------------------------------------------
-// Status screen — "Open Maschine" shown at startup and when Maschine exits
+// Idle screens — encoder-controlled Pong and local clock until Maschine renders
 //
 // Font: 5×7 pixels per glyph, scaled 3× for legibility on the 170×64 display.
 // Framebuffer: 170 bytes/row in ST7529 format (3 logical px packed into 2 bytes).
@@ -613,9 +628,50 @@ static void start_display_flush_timer(bridge_t *br);
 
 typedef struct { uint8_t r[7]; } mk1_glyph_t;
 
-// 5×7 bitmap font — only characters needed for status messages.
+// 5×7 bitmap font for status text, Pong scores, clock and date.
 // Each byte = one row, bit[4]=leftmost pixel, bit[0]=rightmost pixel.
 static const mk1_glyph_t g_font[128] = {
+    ['0'] = {{0x0E,0x11,0x13,0x15,0x19,0x11,0x0E}},
+    ['1'] = {{0x04,0x0C,0x04,0x04,0x04,0x04,0x0E}},
+    ['2'] = {{0x0E,0x11,0x01,0x02,0x04,0x08,0x1F}},
+    ['3'] = {{0x1F,0x02,0x04,0x02,0x01,0x11,0x0E}},
+    ['4'] = {{0x02,0x06,0x0A,0x12,0x1F,0x02,0x02}},
+    ['5'] = {{0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E}},
+    ['6'] = {{0x06,0x08,0x10,0x1E,0x11,0x11,0x0E}},
+    ['7'] = {{0x1F,0x01,0x02,0x04,0x08,0x08,0x08}},
+    ['8'] = {{0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E}},
+    ['9'] = {{0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C}},
+    [':'] = {{0,0x04,0x04,0,0x04,0x04,0}},
+    ['.'] = {{0,0,0,0,0,0x04,0x04}},
+    ['-'] = {{0,0,0,0x1F,0,0,0}},
+    ['P'] = {{0x1E,0x11,0x11,0x1E,0x10,0x10,0x10}},
+    ['N'] = {{0x11,0x19,0x19,0x15,0x13,0x13,0x11}},
+    ['G'] = {{0x0E,0x11,0x10,0x17,0x11,0x11,0x0F}},
+    ['A'] = {{0x0E,0x11,0x11,0x1F,0x11,0x11,0x11}},
+    ['I'] = {{0x0E,0x04,0x04,0x04,0x04,0x04,0x0E}},
+    ['B'] = {{0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E}},
+    ['C'] = {{0x0E,0x11,0x10,0x10,0x10,0x11,0x0E}},
+    ['D'] = {{0x1E,0x11,0x11,0x11,0x11,0x11,0x1E}},
+    ['E'] = {{0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F}},
+    ['F'] = {{0x1F,0x10,0x10,0x1E,0x10,0x10,0x10}},
+    ['H'] = {{0x11,0x11,0x11,0x1F,0x11,0x11,0x11}},
+    ['J'] = {{0x07,0x02,0x02,0x02,0x12,0x12,0x0C}},
+    ['K'] = {{0x11,0x12,0x14,0x18,0x14,0x12,0x11}},
+    ['L'] = {{0x10,0x10,0x10,0x10,0x10,0x10,0x1F}},
+    ['Q'] = {{0x0E,0x11,0x11,0x11,0x15,0x12,0x0D}},
+    ['R'] = {{0x1E,0x11,0x11,0x1E,0x14,0x12,0x11}},
+    ['T'] = {{0x1F,0x04,0x04,0x04,0x04,0x04,0x04}},
+    ['U'] = {{0x11,0x11,0x11,0x11,0x11,0x11,0x0E}},
+    ['V'] = {{0x11,0x11,0x11,0x11,0x11,0x0A,0x04}},
+    ['W'] = {{0x11,0x11,0x11,0x15,0x15,0x15,0x0A}},
+    ['X'] = {{0x11,0x11,0x0A,0x04,0x0A,0x11,0x11}},
+    ['Y'] = {{0x11,0x11,0x0A,0x04,0x04,0x04,0x04}},
+    ['Z'] = {{0x1F,0x01,0x02,0x04,0x08,0x10,0x1F}},
+    ['>'] = {{0x10,0x08,0x04,0x02,0x04,0x08,0x10}},
+    ['/'] = {{0x01,0x02,0x02,0x04,0x08,0x08,0x10}},
+    ['d'] = {{0x01,0x01,0x0D,0x13,0x11,0x13,0x0D}},
+    ['m'] = {{0,0,0x1A,0x15,0x15,0x15,0x15}},
+    ['g'] = {{0,0x0F,0x11,0x0F,0x01,0x11,0x0E}},
     [' '] = {{0x00,0x00,0x00,0x00,0x00,0x00,0x00}},
     ['M'] = {{0x11,0x1B,0x15,0x11,0x11,0x11,0x11}},
     ['O'] = {{0x0E,0x11,0x11,0x11,0x11,0x11,0x0E}},
@@ -665,56 +721,6 @@ static void bmp_fill_rect(uint8_t bmp[64][255],
     }
 }
 
-static void bmp_fill_ellipse(uint8_t bmp[64][255],
-                             int cx,
-                             int cy,
-                             int rx,
-                             int ry,
-                             uint8_t v)
-{
-    if (rx <= 0 || ry <= 0) return;
-    for (int y = cy - ry; y <= cy + ry; y++) {
-        for (int x = cx - rx; x <= cx + rx; x++) {
-            long dx = x - cx;
-            long dy = y - cy;
-            long lhs = dx * dx * ry * ry + dy * dy * rx * rx;
-            long rhs = (long)rx * rx * ry * ry;
-            if (lhs <= rhs) bmp_plot(bmp, x, y, v);
-        }
-    }
-}
-
-static void bmp_fill_triangle(uint8_t bmp[64][255],
-                              int x1,
-                              int y1,
-                              int x2,
-                              int y2,
-                              int x3,
-                              int y3,
-                              uint8_t v)
-{
-    int min_x = x1, max_x = x1, min_y = y1, max_y = y1;
-    if (x2 < min_x) min_x = x2;
-    if (x3 < min_x) min_x = x3;
-    if (x2 > max_x) max_x = x2;
-    if (x3 > max_x) max_x = x3;
-    if (y2 < min_y) min_y = y2;
-    if (y3 < min_y) min_y = y3;
-    if (y2 > max_y) max_y = y2;
-    if (y3 > max_y) max_y = y3;
-
-    for (int y = min_y; y <= max_y; y++) {
-        for (int x = min_x; x <= max_x; x++) {
-            int w1 = (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1);
-            int w2 = (x3 - x2) * (y - y2) - (y3 - y2) * (x - x2);
-            int w3 = (x1 - x3) * (y - y3) - (y1 - y3) * (x - x3);
-            bool has_neg = (w1 < 0) || (w2 < 0) || (w3 < 0);
-            bool has_pos = (w1 > 0) || (w2 > 0) || (w3 > 0);
-            if (!(has_neg && has_pos)) bmp_plot(bmp, x, y, v);
-        }
-    }
-}
-
 static void bmp_pack_st7529(uint8_t *fb, uint8_t bmp[64][255])
 {
     for (int y = 0; y < 64; y++) {
@@ -727,131 +733,6 @@ static void bmp_pack_st7529(uint8_t *fb, uint8_t bmp[64][255])
             row[gr * 2 + 1] = (uint8_t)((b << 6) | c);
         }
     }
-}
-
-static void render_cat_status_fb(uint8_t *fb, int frame)
-{
-    static uint8_t bmp[64][255];
-    const uint8_t W = 0x1F;   // white
-    const uint8_t B = 0x00;   // black (space)
-
-    bmp_fill(bmp, B);         // space background
-
-    // Twinkling stars
-    static const int8_t kStars[][2] = {
-        {18,4},{45,10},{88,2},{135,7},{175,3},{215,12},{245,5},
-        {25,30},{65,22},{155,19},{205,35},{12,40},{108,27},{232,21},
-    };
-    for (int si = 0; si < 14; si++) {
-        if ((frame + si * 7) % 45 < 30)
-            bmp_plot(bmp, (int)kStars[si][0], (int)kStars[si][1], W);
-    }
-
-    // Ground line
-    bmp_fill_rect(bmp, 90, 60, 165, 60, W);
-
-    // 400-frame cycle at ~67 ms/frame (~26.8 s):
-    //   0.. 79  [A] UFO flies L/R, cat on ground
-    //  80..119  [B] UFO homes in above cat
-    // 120..169  [C] beam fires, cat rises into UFO
-    // 170..249  [D] UFO flies L/R, cat inside
-    // 250..289  [E] UFO homes back above drop point
-    // 290..339  [F] beam fires, cat descends to ground
-    // 340..399  [G] UFO flies L/R, cat on ground
-    int f = frame % 400;
-
-    const int CAT_X = 127;
-    const int GND_Y = 60;
-    int cat_lift = 0;
-    bool cat_vis = true;
-    bool beam_active = false;
-
-    if (f >= 120 && f < 170) {
-        float t = (float)(f - 120) / 50.0f;
-        cat_lift = (int)(t * 40.0f);
-        beam_active = true;
-    } else if (f >= 170 && f < 290) {
-        cat_vis = false;
-    } else if (f >= 290 && f < 340) {
-        float t = (float)(f - 290) / 50.0f;
-        cat_lift = (int)((1.0f - t) * 40.0f);
-        beam_active = true;
-    }
-
-    // UFO position
-    float ufo_xf, ufo_yf = 16.0f;
-    if (f < 80) {
-        // [A] fly L/R
-        ufo_xf = 127.5f + 85.0f * sinf((float)f * 2.0f * (float)M_PI / 40.0f);
-    } else if (f < 120) {
-        // [B] home in
-        float t = (float)(f - 80) / 40.0f;
-        t = t * t * (3.0f - 2.0f * t);
-        float sx = 127.5f + 85.0f * sinf(79.0f * 2.0f * (float)M_PI / 40.0f);
-        ufo_xf = sx + t * (127.5f - sx);
-    } else if (f < 170) {
-        // [C] hover while beaming up
-        ufo_xf = 127.5f;
-    } else if (f < 250) {
-        // [D] fly L/R with cat inside
-        ufo_xf = 127.5f + 85.0f * sinf((float)(f - 170) * 2.0f * (float)M_PI / 40.0f);
-    } else if (f < 290) {
-        // [E] home back to drop point
-        float t = (float)(f - 250) / 40.0f;
-        t = t * t * (3.0f - 2.0f * t);
-        float sx = 127.5f + 85.0f * sinf(79.0f * 2.0f * (float)M_PI / 40.0f);
-        ufo_xf = sx + t * (127.5f - sx);
-    } else if (f < 340) {
-        // [F] hover while beaming down
-        ufo_xf = 127.5f;
-    } else {
-        // [G] fly L/R, cat back on ground
-        ufo_xf = 127.5f + 85.0f * sinf((float)(f - 340) * 2.0f * (float)M_PI / 40.0f);
-    }
-    int ux = (int)ufo_xf;
-    int uy = (int)ufo_yf;
-
-    // Tractor beam — alternating white scanlines, widening from UFO down to cat.
-    // Striped so the solid-white cat remains distinguishable inside the beam.
-    if (beam_active) {
-        int bot_y  = GND_Y - cat_lift;
-        int top_y  = uy + 5;
-        int height = bot_y - top_y;
-        if (height > 0) {
-            for (int by = top_y; by <= bot_y; by += 2) {
-                int hw = (int)(20.0f * (float)(by - top_y) / (float)height);
-                bmp_fill_rect(bmp, ux - hw, by, ux + hw, by, W);
-            }
-        }
-    }
-
-    // Cat: small, standing, centered at CAT_X
-    if (cat_vis) {
-        int cy = GND_Y - cat_lift;   // cat bottom y
-
-        bmp_fill_ellipse(bmp, CAT_X,      cy - 5,  11, 4, W);  // body
-        bmp_fill_ellipse(bmp, CAT_X,      cy - 16,  7, 6, W);  // head
-        bmp_fill_triangle(bmp,                                  // left ear
-            CAT_X - 7, cy - 20, CAT_X - 4, cy - 26, CAT_X, cy - 20, W);
-        bmp_fill_triangle(bmp,                                  // right ear
-            CAT_X, cy - 20, CAT_X + 3, cy - 26, CAT_X + 7, cy - 20, W);
-        bmp_fill_rect(bmp, CAT_X - 9, cy - 3, CAT_X - 6, cy, W);   // left front leg
-        bmp_fill_rect(bmp, CAT_X + 6, cy - 3, CAT_X + 9, cy, W);   // right front leg
-        bmp_fill_ellipse(bmp, CAT_X + 15, cy - 8,  3, 7, W);  // tail upright
-        bmp_fill_ellipse(bmp, CAT_X + 19, cy - 14, 4, 3, W);  // tail curl tip
-        bmp_plot(bmp, CAT_X - 3, cy - 17, B);                 // left eye
-        bmp_plot(bmp, CAT_X + 3, cy - 17, B);                 // right eye
-    }
-
-    // UFO (drawn last, covers cat when it enters saucer)
-    if (uy > -20) {
-        bmp_fill_ellipse(bmp, ux, uy,      22, 5, W);  // saucer disk
-        bmp_fill_ellipse(bmp, ux, uy -  6, 12, 9, W);  // dome
-        bmp_fill_ellipse(bmp, ux, uy -  7,  6, 5, B);  // dome window (black)
-        bmp_fill_ellipse(bmp, ux, uy +  4,  8, 2, B);  // underbelly ridge (dark)
-    }
-
-    bmp_pack_st7529(fb, bmp);
 }
 
 // Render up to two lines of text into the 10880-byte ST7529 framebuffer.
@@ -903,6 +784,76 @@ static void render_status_fb(uint8_t *fb,
 
     bmp_pack_st7529(fb, bmp);
 }
+
+static void idle_text(uint8_t bmp[64][255], int x, int y,
+                      const char *text, int scale)
+{
+    for (int i = 0; text[i]; i++) {
+        unsigned char ch = (unsigned char)text[i];
+        const mk1_glyph_t *g = &g_font[ch < 128 ? ch : ' '];
+        for (int r = 0; r < 7; r++) for (int c = 0; c < 5; c++) {
+            if ((g->r[r] >> (4-c)) & 1)
+                bmp_fill_rect(bmp, x+i*6*scale+c*scale, y+r*scale,
+                              x+i*6*scale+c*scale+scale-1, y+r*scale+scale-1, 31);
+        }
+    }
+}
+
+static void render_pong_fb(uint8_t *fb, const idle_pong_t *p)
+{
+    uint8_t bmp[64][255];
+    bmp_fill(bmp, 0);
+    char score[16];
+    snprintf(score, sizeof(score), "%02u - %02u", p->left_score, p->right_score);
+    idle_text(bmp, 82, 3, score, 1);
+    idle_text(bmp, 3, 3, p->left_idle>=10?"AI":"1P", 1);
+    idle_text(bmp, 232, 3, p->right_manual ? "2P" : "AI", 1);
+    bmp_fill_rect(bmp, 0, 13, 254, 13, 18);
+    bmp_fill_rect(bmp, 0, 63, 254, 63, 18);
+    for (int y = 16; y < 63; y += 6) bmp_fill_rect(bmp, 127, y, 127, y+2, 10);
+    bmp_fill_rect(bmp, 7, (int)p->left_y-8, 10, (int)p->left_y+8, 31);
+    bmp_fill_rect(bmp, 244, (int)p->right_y-8, 247, (int)p->right_y+8, 31);
+    bmp_fill_rect(bmp, (int)p->x-2, (int)p->y-2, (int)p->x+2, (int)p->y+2, 31);
+    bmp_pack_st7529(fb, bmp);
+}
+
+static void render_clock_fb(uint8_t *fb, time_t now)
+{
+    struct tm local;
+    tzset();
+    localtime_r(&now, &local);
+    char clock[16], date[24];
+    strftime(clock, sizeof(clock), "%H:%M:%S", &local);
+    strftime(date, sizeof(date), "%d.%m.%Y", &local);
+    render_status_fb(fb, clock, date, false);
+}
+
+static void render_game_menu_fb(uint8_t *fb, const idle_games_t *g)
+{
+    uint8_t bmp[64][255];bmp_fill(bmp,0);
+    idle_text(bmp,61,0,"SELECT GAME",2);
+    const char *names[]={"PONG","FREEDOOM","BREAKOUT"};
+    for(int i=0;i<3;i++){int y=17+i*13;idle_text(bmp,91,y,names[i],1);
+        if(g->selected==i)idle_text(bmp,76,y,">",1);}
+    idle_text(bmp,38,57,"ARROWS SELECT  PLAY START",1);bmp_pack_st7529(fb,bmp);
+}
+static void render_breakout_fb(uint8_t *fb,const idle_breakout_t *b)
+{
+    uint8_t bmp[64][255];bmp_fill(bmp,0);char text[40];
+    snprintf(text,sizeof(text),"SCORE %03u  LIVES %u",b->score,b->lives);idle_text(bmp,65,1,text,1);
+    for(unsigned i=0;i<32;i++)if(b->bricks&(1u<<i)){
+        int x=5+(i%8)*31,y=13+(i/8)*6;bmp_fill_rect(bmp,x,y,x+26,y+3,31-(i/8)*4);
+    }
+    bmp_fill_rect(bmp,(int)b->paddle-22,58,(int)b->paddle+22,60,31);
+    bmp_fill_rect(bmp,(int)b->x-2,(int)b->y-2,(int)b->x+2,(int)b->y+2,31);
+    if(b->waiting||!b->lives||b->won){
+        bmp_fill_rect(bmp,45,38,220,52,0);
+        idle_text(bmp,65,41,b->won?"YOU WIN":(!b->lives?"GAME OVER":"PLAY TO SERVE"),1);
+    }
+    bmp_pack_st7529(fb,bmp);
+}
+
+#include "freedoom_client.h"
 
 // Send a pre-rendered framebuffer to one display (EP8).
 static void send_fb_to_display(bridge_t *br, uint8_t usb_base, const uint8_t *fb)
@@ -1166,62 +1117,102 @@ static void start_display_flush_timer(bridge_t *br)
     dispatch_resume(g_display_flush_timer);
 }
 
-static void stop_cat_animation(void)
+static void update_idle_game_leds(bridge_t *br)
 {
-    if (g_cat_anim_timer) {
-        BLOG("cat anim: stopping");
-        dispatch_source_cancel(g_cat_anim_timer);
-        g_cat_anim_timer = NULL;
+    if(!br->usb)return;
+    uint8_t packet[33];
+    idle_games_led_packet(&g_idle_games,atomic_load(&g_idle_pad_mask),packet);
+    if(g_idle_led_valid && memcmp(packet,g_idle_led_packet,sizeof(packet))==0)return;
+    if(mk1_device_write_endpoint(br->usb,0x01,packet,sizeof(packet))){
+        memcpy(g_idle_led_packet,packet,sizeof(packet));g_idle_led_valid=true;
+        LLOG("idle game pad LEDs: menu=%d game=%d held=0x%04x",g_idle_games.menu,
+             g_idle_games.selected,atomic_load(&g_idle_pad_mask));
+    }else LLOG("idle game pad LED write failed");
+}
+
+static void stop_idle_screen(void)
+{
+    bool was_active=atomic_exchange(&g_idle_active,false);
+    g_idle_led_valid=false;
+    if(was_active && g_bridge.usb){
+        if(g_last_led_logical_len>=32)refresh_led_from_cache(&g_bridge);
+        else {
+            uint8_t off[33]={0x0c,0x00};
+            mk1_device_write_endpoint(g_bridge.usb,0x01,off,sizeof(off));
+        }
+    }
+    stop_freedoom();
+    if (g_idle_timer) {
+        BLOG("idle games: stopping");
+        dispatch_source_cancel(g_idle_timer);
+        g_idle_timer = NULL;
     }
 }
 
-static void start_cat_animation(bridge_t *br)
+static void start_idle_screen(bridge_t *br)
 {
-    stop_cat_animation();
-    g_cat_anim_frame = 0;
-
-    g_cat_anim_timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-                                              dispatch_get_main_queue());
-    if (!g_cat_anim_timer) return;
-
-    BLOG("cat anim: starting");
-    dispatch_source_set_timer(g_cat_anim_timer,
-                              dispatch_time(DISPATCH_TIME_NOW, 67 * NSEC_PER_MSEC),
-                              67 * NSEC_PER_MSEC,
-                              1  * NSEC_PER_MSEC);
-    dispatch_source_set_event_handler(g_cat_anim_timer, ^{
-        if (!g_running || !br->usb) {
-            BLOG("cat anim: tick skipped (running=%d usb=%p)", g_running, (void *)br->usb);
-            return;
+    stop_idle_screen();
+    idle_games_reset(&g_idle_games);
+    atomic_store(&g_idle_pad_mask, 0);
+    g_idle_last_ns = timing_now_ns();
+    g_idle_clock_second = (time_t)-1;
+    g_idle_menu_drawn = -1;
+    g_idle_timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                          dispatch_get_main_queue());
+    if (!g_idle_timer) return;
+    atomic_store(&g_idle_active, true);
+    BLOG("idle games: starting; encoder 3 selects Pong/Doom, Play starts; clock on right display");
+    dispatch_source_set_timer(g_idle_timer,
+                              dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC),
+                              50 * NSEC_PER_MSEC, 2 * NSEC_PER_MSEC);
+    dispatch_source_set_event_handler(g_idle_timer, ^{
+        if (!g_running || !br->usb || !atomic_load(&g_idle_active)) return;
+        uint64_t now_ns = timing_now_ns();
+        float dt = (float)(now_ns - g_idle_last_ns) / 1e9f;
+        g_idle_last_ns = now_ns;
+        idle_games_step(&g_idle_games, dt, atomic_load(&g_idle_pad_mask));
+        update_idle_game_leds(br);
+        if (g_idle_games.menu || g_idle_games.selected != 1) {
+            if (g_freedoom_attempted) stop_freedoom();
+        } else if (!g_freedoom_attempted) start_freedoom();
+        uint8_t fb[DISPLAY_FB_BYTES];
+        if (!g_idle_games.menu || g_idle_menu_drawn != g_idle_games.selected) {
+            if (g_idle_games.menu) render_game_menu_fb(fb, &g_idle_games);
+            else if (g_idle_games.selected == 0) render_pong_fb(fb, &g_idle_games.pong);
+            else if (g_idle_games.selected == 2)render_breakout_fb(fb,&g_idle_games.breakout);
+            else if (!freedoom_frame(fb, atomic_load(&g_idle_pad_mask), now_ns))
+                render_status_fb(fb, g_freedoom_pid > 0 ? "Loading" : "Doom error", "Freedoom", false);
+            send_fb_to_display(br, 0x00, fb);
+            g_idle_menu_drawn = g_idle_games.menu ? g_idle_games.selected : -1;
         }
-        int frame = g_cat_anim_frame++;
-        if (frame % 30 == 0) BLOG("cat anim: frame %d", frame);
-        uint8_t left_fb[DISPLAY_FB_BYTES];
-        render_cat_status_fb(left_fb, frame);
-        send_fb_to_display(br, 0x00, left_fb);
+        time_t now = time(NULL);
+        if (!g_idle_games.menu && g_idle_games.selected == 1 && g_freedoom_have_frame) {
+            freedoom_hud_frame(fb);
+            if (memcmp(fb,g_idle_right_frame,sizeof(g_idle_right_frame)) != 0) {
+                send_fb_to_display(br,0x02,fb);
+                memcpy(g_idle_right_frame,fb,sizeof(g_idle_right_frame));
+            }
+            g_idle_clock_second=(time_t)-1;
+        } else if (now != g_idle_clock_second) {
+            g_idle_clock_second = now;
+            render_clock_fb(fb, now);
+            send_fb_to_display(br, 0x02, fb);
+            memcpy(g_idle_right_frame,fb,sizeof(g_idle_right_frame));
+        }
     });
-    dispatch_resume(g_cat_anim_timer);
+    dispatch_resume(g_idle_timer);
 }
 
-// Render and send the disconnected status screens.
 static void show_status_screen(bridge_t *br)
 {
     if (!br->usb) return;
-    uint8_t left_fb[DISPLAY_FB_BYTES];
-    uint8_t right_fb[DISPLAY_FB_BYTES];
-
-    render_cat_status_fb(left_fb, 0);
-    render_status_fb(right_fb, "Open Maschine", "Software", true);
-
-    send_fb_to_display(br, 0x00, left_fb);
-    send_fb_to_display(br, 0x02, right_fb);
-    start_cat_animation(br);
-    DLOG("status screen shown");
+    start_idle_screen(br);
+    DLOG("idle game selector and clock shown");
 }
 
 static void forward_display(bridge_t *br, const uint8_t *raw_msg, size_t raw_len)
 {
-    stop_cat_animation();
+    stop_idle_screen();
 
     uint64_t start_ns = timing_now_ns();
 
@@ -1271,16 +1262,8 @@ static void forward_display(bridge_t *br, const uint8_t *raw_msg, size_t raw_len
 
     const uint8_t *pixels = raw_msg + IPC_DISPLAY_HDR_LEN;
 
-    // Skip all-zero (pure black) updates — Maschine sends these as view-transition clears
-    // before new content arrives. Holding the previous frame prevents a brief dark flash.
-    bool all_black = true;
-    for (size_t i = 0; i < (size_t)pixel_len && all_black; i++) {
-        if (pixels[i] != 0x00) all_black = false;
-    }
-    if (all_black) {
-        DLOG("disp=%u skipping all-black update (pixel_len=%u)", disp_idx, pixel_len);
-        return;
-    }
+    // Black pixels are valid updates too: meters and view changes must erase
+    // their previous contents. The flush scheduler coalesces transition clears.
 
     // Composite update region into the local framebuffer at the correct (y, x) position.
     pthread_mutex_lock(&g_display_lock);
@@ -1292,12 +1275,21 @@ static void forward_display(bridge_t *br, const uint8_t *raw_msg, size_t raw_len
     if (g_display_batch_start_ns[disp_idx] == 0) {
         g_display_batch_start_ns[disp_idx] = start_ns;
     }
-    // Partial mode performs best when we keep the newest region instead of
-    // unioning many small updates into a large near-full-frame box.
-    g_display_row_start[disp_idx] = y;
-    g_display_row_end[disp_idx] = (uint16_t)(y + h - 1);
-    g_display_byte_x_start[disp_idx] = (uint16_t)byte_x;
-    g_display_byte_x_end[disp_idx] = (uint16_t)(byte_x + bytes_per_row - 1);
+    // Preserve every pending region, including updates arriving during a USB
+    // flush. Keeping only the newest rectangle leaves earlier pixels stale.
+    uint16_t row_end = (uint16_t)(y + h - 1);
+    uint16_t byte_end = (uint16_t)(byte_x + bytes_per_row - 1);
+    if (!g_display_have_region[disp_idx]) {
+        g_display_row_start[disp_idx] = y;
+        g_display_row_end[disp_idx] = row_end;
+        g_display_byte_x_start[disp_idx] = (uint16_t)byte_x;
+        g_display_byte_x_end[disp_idx] = byte_end;
+    } else {
+        if (y < g_display_row_start[disp_idx]) g_display_row_start[disp_idx] = y;
+        if (row_end > g_display_row_end[disp_idx]) g_display_row_end[disp_idx] = row_end;
+        if (byte_x < g_display_byte_x_start[disp_idx]) g_display_byte_x_start[disp_idx] = (uint16_t)byte_x;
+        if (byte_end > g_display_byte_x_end[disp_idx]) g_display_byte_x_end[disp_idx] = byte_end;
+    }
     g_display_have_region[disp_idx] = true;
     g_display_dirty_mask |= (1u << disp_idx);
     pthread_mutex_unlock(&g_display_lock);
@@ -1728,12 +1720,12 @@ static void emit_led_state(bridge_t *br, const uint8_t *led_logical, size_t full
     //   ...
     //   logical[56] = m_leds[57] = NoteRepeat -> device_leds[57] = phys[27]
     //
-    // This also overwrites any stale pad-rubber values that k_hw_by_logical
-    // placed into group positions (logical[0..15] = CABL pad rubbers land on
-    // phys[3..10] via the legacy table; this pass corrects them).
+    // This also overwrites stale pad-rubber values that the legacy table placed
+    // into controller positions. A zero is an explicit OFF state and must replace
+    // the legacy value too; skipping zeros makes pad hits flash unrelated buttons.
     for (uint8_t li = 32; li <= 56 && (size_t)li < full_len; li++) {
         uint8_t dev_slot = (uint8_t)(li + 1);
-        if (dev_slot < 62 && led_logical[li] != 0) device_leds[dev_slot] = led_logical[li];
+        if (dev_slot < 62) device_leds[dev_slot] = led_logical[li];
     }
 
     if (g_led_autowrite_pressed) {
@@ -1795,6 +1787,7 @@ static void emit_led_state(bridge_t *br, const uint8_t *led_logical, size_t full
 
 static void forward_led(bridge_t *br, const uint8_t *raw_msg, size_t raw_len)
 {
+    if(atomic_load(&g_idle_active))g_idle_led_valid=false;
     if (!br->usb) {
         LLOG("no USB device");
         return;
@@ -2037,6 +2030,8 @@ static bool send_pad_record(mk1_server_t *srv,
 {
     // header(16) + 1 record(12) = 28 bytes
     uint8_t buf[28];
+    if(pad_index<16){unsigned physical=idle_pad_physical_index(pad_index);
+        pad_index=(uint32_t)g_studio_profile.pads[physical].target ^ 12u;}
     uint32_t msg_type = NI_EVT_PAD_DATA;
     uint32_t ts_hi    = (uint32_t)(ts_ns >> 32);
     uint32_t ts_lo    = (uint32_t)(ts_ns & 0xffffffffu);
@@ -2052,7 +2047,8 @@ static bool send_pad_record(mk1_server_t *srv,
 
     uint64_t start_ns = timing_now_ns();
     bool ok = mk1_server_send_event(srv, buf, sizeof(buf));
-    TLOG("ipc-tx pad idx=%u ev=%u ok=%d dur_us=%llu value=%.4f hw_ts_ns=%llu",
+    if (g_timing_trace || g_pad_trace) log_write(&g_log_timing, false,
+         "[timing]  ipc-tx pad idx=%u ev=%u ok=%d dur_us=%llu value=%.4f hw_ts_ns=%llu",
          pad_index,
          event_type,
          ok ? 1 : 0,
@@ -2062,9 +2058,28 @@ static bool send_pad_record(mk1_server_t *srv,
     return ok;
 }
 
-static void on_pad(const mk1_pad_event_t *pads, uint8_t count, void *ctx)
+static void process_pad_events(const mk1_pad_event_t *pads, uint8_t count, void *ctx)
 {
     bridge_t *br = (bridge_t *)ctx;
+    if (atomic_load(&g_idle_active)) {
+        uint32_t mask = atomic_load(&g_idle_pad_mask);
+        for (uint8_t i = 0; i < count && i < 16; i++) {
+            uint32_t raw_index = pads[i].index;
+            uint32_t index = idle_pad_physical_index(raw_index);
+            if (index >= 16) continue;
+            uint32_t bit = 1u << index;
+            studio_pad_t q=g_studio_profile.pads[index];
+            unsigned pressure=studio_pressure(pads[i].pressure,q);
+            unsigned threshold=(mask&bit)?(q.override?q.off:g_pad_hit_off_threshold):(q.override?q.on:g_pad_hit_on_threshold);
+            bool down = q.enabled && pressure>0 && pressure >= threshold;
+            if(down && !(mask & bit))BTNLOG("idle pad down physical=%u raw=%u pressure=%u",index+1,raw_index,pads[i].pressure);
+            if(!down && (mask & bit))BTNLOG("idle pad up physical=%u raw=%u",index+1,raw_index);
+            if (down) mask |= bit;
+            else mask &= ~bit;
+        }
+        atomic_store(&g_idle_pad_mask, mask);
+        return;
+    }
     if (!br->srv || !mk1_server_is_input_ready(br->srv)) return;
 
     struct timespec ts;
@@ -2080,8 +2095,13 @@ static void on_pad(const mk1_pad_event_t *pads, uint8_t count, void *ctx)
     }
 
     for (uint8_t i = 0; i < count && i < 16; i++) {
-        uint32_t idx      = pads[i].index;    // EP4 pair == IPC pad_index (confirmed)
-        uint16_t pressure = pads[i].pressure;
+        uint32_t idx      = pads[i].index;    // Native Maschine USB ID.
+        if(idx>=16)continue;
+        studio_pad_t profile=g_studio_profile.pads[idle_pad_physical_index(idx)];
+        uint16_t pressure = (uint16_t)studio_pressure(pads[i].pressure,profile);
+        int hit_on=profile.override?profile.on:g_pad_hit_on_threshold;
+        int hit_off=profile.override?profile.off:g_pad_hit_off_threshold;
+        int pressure_step=profile.override?profile.pressure:g_pad_pressure_threshold;
         uint16_t prev     = g_prev_pressure[idx];
         // was_active is true only if a hit_on was actually sent (g_sent_pressure > 0).
         // Using g_prev_pressure >= hit_off_threshold caused orphaned hit_off events:
@@ -2089,7 +2109,7 @@ static void on_pad(const mk1_pad_event_t *pads, uint8_t count, void *ctx)
         // any subsequent drop below 150 emitted hit_off with no corresponding hit_on.
         bool     was_active = g_sent_pressure[idx] > 0;
         bool     is_active =
-            pressure >= (uint16_t)(was_active ? g_pad_hit_off_threshold : g_pad_hit_on_threshold);
+            profile.enabled && pressure>0 && pressure >= (uint16_t)(was_active ? hit_off : hit_on);
 
         // Only skip identical pressure if no state transition would occur.
         // Applying this gate unconditionally can prevent hit_on from firing after
@@ -2151,7 +2171,7 @@ static void on_pad(const mk1_pad_event_t *pads, uint8_t count, void *ctx)
             // pad held — only forward if pressure changed enough to be meaningful
             uint16_t sent = g_sent_pressure[idx];
             uint16_t delta = pressure > sent ? pressure - sent : sent - pressure;
-            if (delta >= (uint16_t)g_pad_pressure_threshold) {
+            if (delta >= (uint16_t)pressure_step) {
                 send_pad_record(br->srv, ts_ns, idx, PAD_EVT_PRESSURE_UPDATE, value);
                 g_sent_pressure[idx] = pressure;
             }
@@ -2164,13 +2184,65 @@ static void on_pad(const mk1_pad_event_t *pads, uint8_t count, void *ctx)
     }
 }
 
-static void on_button(const mk1_button_event_t *ev, void *ctx)
+static void on_pad(const mk1_pad_event_t *pads,uint8_t count,void *ctx)
+{
+    for(uint8_t i=0;i<count&&i<16;i++)if(pads[i].index<16)
+        atomic_store(&g_studio_pressures[idle_pad_physical_index(pads[i].index)],pads[i].pressure);
+    pthread_mutex_lock(&g_pad_state_lock);
+    process_pad_events(pads,count,ctx);
+    pthread_mutex_unlock(&g_pad_state_lock);
+}
+
+static void on_button(const mk1_button_event_t *raw_ev, void *ctx)
 {
     bridge_t *br = (bridge_t *)ctx;
-    if (!br->srv || !mk1_server_is_input_ready(br->srv)) return;
-
+    mk1_button_event_t adjusted=*raw_ev;
+    const mk1_button_event_t *ev=&adjusted;
     uint32_t msg_type = 0;
     if (ev->len >= 4) memcpy(&msg_type, ev->raw, 4);
+    if(msg_type==NI_EVT_KNOB_ROTATE&&ev->len>=24){
+        uint32_t index;float delta;memcpy(&index,ev->raw+16,4);memcpy(&delta,ev->raw+20,4);
+        if(index<11){
+            atomic_store(&g_studio_encoder_delta[index],(int)(delta*10000));
+            atomic_store(&g_studio_encoder_time[index],timing_now_ns());
+            pthread_mutex_lock(&g_pad_state_lock);studio_encoder_t q=g_studio_profile.encoders[index];pthread_mutex_unlock(&g_pad_state_lock);
+            if(!q.enabled)return;
+            delta*=q.gain/100.f*(q.invert?-1:1);
+            if(!atomic_load(&g_idle_active))index=q.target;
+            memcpy(adjusted.raw+16,&index,4);memcpy(adjusted.raw+20,&delta,4);
+        }
+    }else if(msg_type==NI_EVT_BTN_DATA&&ev->len>=24){
+        uint32_t index,pressed;memcpy(&index,ev->raw+16,4);memcpy(&pressed,ev->raw+20,4);
+        if(index<64){uint64_t bit=1ULL<<index;if(pressed)atomic_fetch_or(&g_studio_buttons,bit);else atomic_fetch_and(&g_studio_buttons,~bit);}
+    }
+    if (atomic_load(&g_idle_active)) {
+        if (msg_type == NI_EVT_KNOB_ROTATE && ev->len >= 24) {
+            uint32_t index; float delta;
+            memcpy(&index, ev->raw + 16, 4);
+            memcpy(&delta, ev->raw + 20, 4);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (!atomic_load(&g_idle_active)) return;
+                if (!g_idle_games.menu && g_idle_games.selected == 1 && index != 5)
+                    freedoom_encoder(index, delta, timing_now_ns());
+                if (idle_games_encoder(&g_idle_games, index, delta))
+                    ENCLOG("idle games idx=%u delta=%.4f selected=%d menu=%d", index, delta, g_idle_games.selected, g_idle_games.menu);
+            });
+        } else if (msg_type == NI_EVT_BTN_DATA && ev->len >= 24) {
+            uint32_t index, pressed;
+            memcpy(&index, ev->raw + 16, 4);
+            memcpy(&pressed, ev->raw + 20, 4);
+            if (pressed) dispatch_async(dispatch_get_main_queue(), ^{
+                if (!atomic_load(&g_idle_active)) return;
+                if (index == 0x0f) stop_freedoom();
+                if (!g_idle_games.menu && g_idle_games.selected == 1 && index == 0x29)
+                    g_freedoom_fire_until = timing_now_ns() + 120000000;
+                if (idle_games_button(&g_idle_games, index))
+                    BTNLOG("idle games button=0x%x selected=%d menu=%d", index, g_idle_games.selected, g_idle_games.menu);
+            });
+        }
+        return;
+    }
+    if (!br->srv || !mk1_server_is_input_ready(br->srv)) return;
 
     if (msg_type == NI_EVT_KNOB_ROTATE && ev->len >= 24) {
         uint32_t encoder_index = 0;
@@ -3288,8 +3360,8 @@ static bool device_open_and_init(bridge_t *br)
     // stale pixels until the user does something in the app.
     {
         static const uint8_t k_black[MK1_DISPLAY_FB_BYTES];
-        mk1_set_display(br->usb, 0x00, k_black, sizeof(k_black));
-        mk1_set_display(br->usb, 0x02, k_black, sizeof(k_black));
+        send_fb_to_display(br, 0x00, k_black);
+        send_fb_to_display(br, 0x02, k_black);
     }
 
     // Turn on display backlight. The init sequence clears DIMM_LEDS to all zeros
@@ -3398,17 +3470,23 @@ static void on_device_removed(void *ctx)
     memset(g_prev_pressure, 0, sizeof(g_prev_pressure));
     memset(g_sent_pressure, 0, sizeof(g_sent_pressure));
     memset(g_led_pad_pressure, 0, sizeof(g_led_pad_pressure));
+    for(int i=0;i<16;i++)atomic_store(&g_studio_pressures[i],0);
+    for(int i=0;i<11;i++)atomic_store(&g_studio_encoder_time[i],0);
+    atomic_store(&g_studio_buttons,0);
 }
 
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
+#include "studio_service.h"
+
 int main(int argc, char **argv)
 {
     const char *timing_env = getenv("MK1_TIMING_TRACE");
 
     g_timing_trace = timing_env && timing_env[0] && strcmp(timing_env, "0") != 0;
+    g_pad_trace = env_truthy("MK1_PAD_TRACE");
     g_pad_hit_on_threshold   = env_int_or_default("MK1_PAD_HIT_ON",        300);
     g_pad_hit_off_threshold  = env_int_or_default("MK1_PAD_HIT_OFF",       150);
     g_pad_pressure_threshold = env_int_or_default("MK1_PAD_PRESSURE",      200);
@@ -3448,6 +3526,7 @@ int main(int argc, char **argv)
     }
 
     open_logs();
+    studio_start();
 
     signal(SIGINT,  sig_handler);
     signal(SIGTERM, sig_handler);
@@ -3518,7 +3597,8 @@ int main(int argc, char **argv)
         dispatch_source_cancel(g_display_flush_timer);
         g_display_flush_timer = NULL;
     }
-    stop_cat_animation();
+    studio_stop();
+    stop_idle_screen();
     mk1_hotplug_stop(g_bridge.hotplug);
     if (g_bridge.srv) {
         mk1_server_stop(g_bridge.srv);

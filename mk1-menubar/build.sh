@@ -16,8 +16,11 @@ swiftc \
     -framework ServiceManagement \
     -O \
     -target arm64-apple-macosx14.0 \
-    "${SCRIPT_DIR}/main.swift" \
+    "${SCRIPT_DIR}/main.swift" "${SCRIPT_DIR}/ControllerStudio.swift" \
     -o "${BUILD_DIR}/${BINARY_NAME}"
+
+python3 "${REPO_ROOT}/scripts/fetch-freedoom.py"
+python3 "${REPO_ROOT}/scripts/build-freedoom.py"
 
 echo "==> Packaging app bundle..."
 CONTENTS="${APP_BUNDLE}/Contents"
@@ -26,7 +29,14 @@ mkdir -p "${CONTENTS}/Resources"
 
 cp "${BUILD_DIR}/${BINARY_NAME}"                    "${CONTENTS}/MacOS/${BINARY_NAME}"
 cp "${BUILD_DIR}/${CONFIGURATION}/mk1-bridge"       "${CONTENTS}/MacOS/mk1-bridge"
+cp "${BUILD_DIR}/Debug/mk1-freedoom" "${CONTENTS}/MacOS/mk1-freedoom"
+mkdir -p "${CONTENTS}/Resources/freedoom"
+cp "${REPO_ROOT}/assets/freedoom/"* "${CONTENTS}/Resources/freedoom/"
+cp "${REPO_ROOT}/third_party/doomgeneric/LICENSE" "${CONTENTS}/Resources/freedoom/DOOM-ENGINE-LICENSE.txt"
+codesign --force --sign - "${CONTENTS}/MacOS/mk1-freedoom"
 cp "${SCRIPT_DIR}/Info.plist"                       "${CONTENTS}/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${APP_VERSION:-0.4.0}" "${CONTENTS}/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-400}" "${CONTENTS}/Info.plist"
 cp "${SCRIPT_DIR}/AppIcon.icns"     "${CONTENTS}/Resources/AppIcon.icns"
 cp "${SCRIPT_DIR}/menubar.png"      "${CONTENTS}/Resources/menubar.png"
 cp "${SCRIPT_DIR}/menubar@2x.png"   "${CONTENTS}/Resources/menubar@2x.png"

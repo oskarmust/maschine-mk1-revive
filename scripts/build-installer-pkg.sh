@@ -15,10 +15,7 @@ OUT_PKG="${OUT_DIR}/mk1-bridge-${PKG_VERSION}-${CONFIGURATION}.pkg"
 STAGE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/mk1-bridge-pkg-root.XXXXXX")"
 trap 'rm -rf "${STAGE_ROOT}"' EXIT INT TERM
 
-xcodebuild -project "${REPO_ROOT}/maschine-mk1-revive.xcodeproj" \
-    -scheme mk1-bridge \
-    -configuration "${CONFIGURATION}" \
-    build
+CONFIGURATION="${CONFIGURATION}" sh "${REPO_ROOT}/scripts/build-bridge.sh"
 
 CONFIGURATION="${CONFIGURATION}" bash "${REPO_ROOT}/mk1-menubar/build.sh"
 

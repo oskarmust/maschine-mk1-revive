@@ -15,3 +15,12 @@ NIUSBMaschineController.kext/
 MASCHINE_2.0_MK1_2.7.6_0518_Manual_English.pdf
 znilcjyseuwhvfgcws5p.jpg
 mk1-trace/oldmac:~
+
+# Local diagnostics, generated caches and downloaded game data
+diagnostics/
+tmp/
+__pycache__/
+.pytest_cache/
+*.pyc
+.savegame/
+assets/freedoom/*.wad

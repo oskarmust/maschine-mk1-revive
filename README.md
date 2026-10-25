@@ -1,3 +1,44 @@
+> Fork maintained by [oskarmust](https://github.com/oskarmust), based on
+> [andy83-projects/maschine-mk1-revive](https://github.com/andy83-projects/maschine-mk1-revive).
+> Apple Silicon beta: macOS 14 or later. Physical MK1 hardware is required.
+
+## Controller Studio and idle games
+
+Open **Controller Studio** from the menu bar to see live pads, encoders and
+buttons in a matching MK1 layout. Select a pad or encoder to edit its enable
+state, gain and MASCHINE destination; pads also support threshold overrides,
+and encoders support direction inversion. Release held pads before applying.
+Profiles live in `~/Library/Application Support/MK1 Revive/controls.plist`.
+The existing global settings remain available in the same window.
+
+The Games tab launches Pong, Freedoom or Breakout when MASCHINE is not using
+the controller. The hardware arrows below Browse/Sampling select a game;
+Play starts it and Browse returns to the menu. Screen encoder 3 also selects.
+Pong switches each paddle to AI after 10 seconds without input; turning its
+encoder restores manual control. Breakout uses encoder 1 or pads 1/4, with
+Play to serve. Freedoom uses pads 14/10 to move, 9/11 to turn, 13/15 to
+strafe, 12 to fire and 16 to use. Gameplay is on the left LCD, its original
+status bar on the right. Freedoom audio is disabled.
+
+## Building this fork
+
+Install Apple's Command Line Tools (`xcode-select --install`), Python 3 and Git.
+Full Xcode is optional. Clone recursively, then run:
+
+```sh
+git submodule update --init --recursive
+sh scripts/build-release-assets.sh
+sh scripts/test.sh
+```
+
+The build downloads the pinned Freedoom 0.13.0 WAD and validates its SHA-256.
+The app ZIP is in `dist/`; drag the app to Applications and launch it.
+These beta builds use ad hoc signing and are not notarized. The engine's
+GPL source and Freedoom license/credits are retained in this repository and
+app bundle. See [NOTICE.md](NOTICE.md) for component attribution.
+
+---
+
 # maschine-mk1-revive
 
 Userspace driver for the Native Instruments Maschine MK1 on Apple Silicon macOS — no kext, no DriverKit, no special entitlements.
@@ -75,6 +116,8 @@ Use the **Settings…** panel in the MK1 Revive menu bar app, or set environment
 |---------|---------|-------------|
 | `MK1_VERBOSE_IO` | off | Log every USB bulk transfer |
 | `MK1_TIMING_TRACE` | off | Log IPC and USB timing measurements |
+| `MK1_PAD_TRACE` | off | Log pad event send results to `timing.log`, without tracing every USB transfer |
+| `MK1_PAD_CAPTURE` | unset | Path for a circular raw EP4 capture before filtering; 72-byte records (LE uptime ns + 64 raw bytes), limited to 16 MiB; sort by timestamp after wrap |
 
 ## Build
 
@@ -142,3 +185,64 @@ The MK1 originally required `NIUSBMaschineController.kext` — a kernel extensio
 ### v0.2.0 — 2026-04-14
 - MK1 Revive menu bar app: service management and settings panel
 - Runtime-configurable pad thresholds and encoder sensitivity via env vars
+
+### Idle games, clock and Freedoom
+
+Turn the **third encoder below the left display** to select **Pong / Freedoom**;
+**Play** starts the selected game. **Browse** returns to selection; **Restart**
+starts the selected game over.
+
+- Pong: encoder 1 controls the left paddle. Encoder 4 controls the right paddle
+  and switches it from AI to a second player.
+- Freedoom: the real doomgeneric engine runs Freedoom Phase 1 0.13.0 (E1M1).
+  Pads 14/10 move forward/back (W/S), pads 9/11 turn left/right (A/D),
+  pad 12 fires, pad 16 uses doors/switches. Pads 13/15 strafe left/right, so the
+  game is fully playable using pads. Encoder 1 also turns and encoder 4 moves
+  forward/back. Pads 1–4 select weapons, pad 5 confirms menus, pad 6 toggles the automap.
+  Play also fires. This first backend has no audio.
+  WASD pads light at level 40/63, strafe pads 13/15 at 12/63, fire at 63/63,
+  and use at 28/63; active presses brighten lit controls to 63/63.
+  Unused pads remain off. Game selection lights Play; Pong clears pad indicators.
+  The idle lighting does not modify the cached Maschine LED state.
+  Physical pad numbering is calibrated separately from USB IDs: idle input
+  flips the USB's top-first row order to the printed bottom-first numbering
+  (zero-based physical index = USB ID XOR 12). Normal Maschine forwarding
+  retains its native USB pad numbering. Calibration is recorded in
+  `diagnostics/20261025-idle-pad-layout/`.
+- During Freedoom, the engine renders its native 320x168 playfield and 320x32
+  status bar. These are separated and independently scaled to the two LCDs:
+  left = game only; right = original Freedoom status-bar artwork (face, health,
+  armor, ammo, weapons and keys). Both images come from the same engine frame.
+  A cached frame avoids loading-screen flashes when a shared-memory update is in flight.
+  During Pong and game selection, the right LCD shows local time and date.
+
+The Doom subprocess starts only when selected. It is stopped and reaped when
+returning to selection, starting Pong, restarting, or receiving Maschine display
+content. It also exits if its parent bridge dies. Shared-framebuffer files are
+private and removed on shutdown. The game itself ticks at Doom's native rate;
+the bridge samples its grayscale framebuffer at 20 Hz. HUD and clock USB writes
+are suppressed when unchanged; static menus redraw only on selection changes.
+Idle controls are consumed locally rather than forwarded to Maschine.
+
+Build the game helper with `python3 scripts/build-freedoom.py`. The menu-bar app
+packaging script includes it and the WAD/license files. Upstream engine sources,
+revision and licenses are documented in `third_party/README.md`.
+
+Checks from the project directory:
+
+```sh
+clang -Wall -Wextra tests/test_idle_pong.c -o /tmp/test-idle-pong
+/tmp/test-idle-pong
+clang -O2 -Wall -Wextra -fsanitize=undefined tests/test_idle_games.c -o /tmp/test-idle-games
+/tmp/test-idle-games
+python3 tests/test_display_updates.py
+python3 tests/test_freedoom_runtime.py
+python3 tests/test_freedoom_keys.py
+clang -O2 -Wall -Wextra tests/test_idle_game_leds.c -o /tmp/test-idle-game-leds
+/tmp/test-idle-game-leds
+```
+
+The real-engine smoke test validates WAD rendering, actual player-coordinate
+movement, firing/ammo consumption, native status-bar pixels and HUD telemetry. The production client
+lifecycle test is in `tests/test_freedoom_client.c` (run from a bundle layout
+containing the helper and Resources/freedoom directory).
