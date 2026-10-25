@@ -2,6 +2,14 @@
 > [andy83-projects/maschine-mk1-revive](https://github.com/andy83-projects/maschine-mk1-revive).
 > Apple Silicon beta: macOS 14 or later. Physical MK1 hardware is required.
 
+## Why this fork exists
+
+This started as a repair job for a real MASCHINE MK1. Pads sometimes failed to register or dropped hits, and highlights could appear on the wrong controls. Display updates also left stale content behind. We wanted the controller to behave reliably and the helper to show what the hardware was actually doing.
+
+The fixes decode pad reports by their embedded pad IDs, preserve releases, correct physical control/LED mappings, and retain all pending display updates, including black clears. Controller Studio now follows the MK1 layout and makes input, sensitivity and mapping adjustments visible.
+
+Somehow, we also couldn't find Doom running on the controller. Clearly an oversight. Doom support has therefore been “restored” — using the Doom engine and Freedoom data, with gameplay on the left display and the original status bar on the right. For historical accuracy: upstream never claimed to include Doom; the restoration is entirely in our imagination.
+
 ## Controller Studio and idle games
 
 Open **Controller Studio** from the menu bar to see live pads, encoders and
