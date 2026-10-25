@@ -28,6 +28,24 @@ Play to serve. Freedoom uses pads 14/10 to move, 9/11 to turn, 13/15 to
 strafe, 12 to fire and 16 to use. Gameplay is on the left LCD, its original
 status bar on the right. Freedoom audio is disabled.
 
+## Screenshots
+
+**Controller Studio** — MK1 hardware layout with live pad, encoder and button
+feedback. Select a pad to inspect its pressure, sensitivity, thresholds and
+MASCHINE destination.
+
+![Controller Studio showing the MK1 layout and Pad 14 settings](docs/screenshots/controller-studio.png)
+
+**Encoder settings** — select a rotary encoder to adjust gain, invert its
+direction or override its MASCHINE destination.
+
+![Controller Studio showing screen encoder sensitivity, inversion and destination settings](docs/screenshots/encoder-settings.png)
+
+**Game launcher** — start Pong, Freedoom or Breakout from the helper when
+MASCHINE is not using the controller. The hardware arrows also select games.
+
+![Game launcher with Pong, Freedoom and Breakout](docs/screenshots/game-launcher.png)
+
 ## Building this fork
 
 Install Apple's Command Line Tools (`xcode-select --install`), Python 3 and Git.
