@@ -44,6 +44,22 @@ to open it, go to **System Settings → Privacy & Security → Open Anyway**, th
 confirm **Open** if you choose to trust it. Follow
 [Apple's app-opening guidance](https://support.apple.com/en-us/102445).
 
+**Terminal alternative for a quarantine/developer-verification block**
+
+After moving the app to Applications, run:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/MK1 Revive.app"
+open "/Applications/MK1 Revive.app"
+```
+
+This removes the download quarantine attribute from **this app bundle only**;
+it does not notarize the app or disable Gatekeeper system-wide. Use it for the
+release ZIP you chose to trust, not to override an explicit malware warning.
+If `xattr` reports “No such xattr”, the quarantine attribute is already absent;
+try the `open` command. If it reports a permission error, use the Privacy &
+Security route above rather than changing permissions across Applications.
+
 On the first launch, MK1 Revive automatically creates its user LaunchAgent and
 starts the background bridge. Look for the MK1 Revive icon in the **macOS menu
 bar**; a permanent Dock icon is not required.
@@ -122,8 +138,34 @@ project files or unrelated logs.
 
 ### Uninstalling
 
-Choose **Stop**, disable **Launch at Login** if enabled, then **Quit**. Move
-`/Applications/MK1 Revive.app` to Trash. In Finder's **Go → Go to Folder…**, open
-`~/Library/LaunchAgents/` and remove **only** `com.dragco.mk1-bridge.plist` to
-prevent it loading at login. Keep settings unless you explicitly want a reset:
-`~/Library/Application Support/MK1 Revive/` contains your controller profile.
+Save your MASCHINE project and quit MASCHINE first. If the helper opens, turn off
+**Launch at Login**, then choose **Stop → Quit**. The bridge is a separate
+background service, so quitting the helper alone is not enough.
+
+In Terminal, run this block to stop the service, close the helper and remove the
+LaunchAgent and application:
+
+```sh
+launchctl bootout "gui/$(id -u)/com.dragco.mk1-bridge" 2>/dev/null || true
+pkill -x mk1-menubar 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/com.dragco.mk1-bridge.plist"
+rm -rf "/Applications/MK1 Revive.app"
+```
+
+The first two commands also work if the app cannot open; an already-stopped
+process/service is harmless. The removal commands permanently delete only the
+named LaunchAgent and app. They leave MASCHINE, Native Instruments software,
+your music projects and your saved Revive settings in place. For a graphical
+alternative, after stopping the service, move the app and that LaunchAgent file
+to Trash in Finder.
+
+**Optional full reset:** to also delete Revive profiles, Doom settings, copied
+custom WADs and game configuration, run this separate block:
+
+```sh
+rm -rf "$HOME/Library/Application Support/MK1 Revive"
+defaults delete com.dragco.mk1-revive 2>/dev/null || true
+```
+
+This deletes the app's imported WAD **copies**, not the original files you
+selected. Skip the reset if you plan to reinstall and keep your settings.
